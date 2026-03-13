@@ -4,6 +4,7 @@ Starter kit tecnico para hot start de novos projetos, sem acoplamento de regra d
 
 ## Baseline atual
 - Versao oficial: `template-v1.1` (arquivo `VERSION`).
+- Diretiva obrigatoria: todo projeto derivado deve ser 100% baseado em microservicos por dominio da aplicacao.
 - Stack base:
   - Kubernetes on-prem (Microk8s)
   - NGINX Ingress + Kong

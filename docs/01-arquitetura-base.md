@@ -39,6 +39,7 @@ Definir baseline tecnica para iniciar projetos novos com padrao escalavel, obser
 - Instrumentacao HTTP com OpenTelemetry.
 
 ## Principios tecnicos obrigatorios
+- Arquitetura de aplicacao: 100% baseada em microservicos por dominio.
 - Escritas de negocio (`INSERT`/`UPDATE`): assíncronas via RabbitMQ (producer-consumer).
 - Leituras de alta repeticao: cache-first em Redis.
 - Persistencia de timestamps: UTC.

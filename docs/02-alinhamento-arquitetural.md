@@ -22,6 +22,7 @@ Use este arquivo para validar os detalhes antes de iniciar o novo projeto.
 - [ ] Manter cert-manager + Let's Encrypt.
 
 ## 4) Frontend e backend base
+- [ ] Manter arquitetura 100% baseada em microservicos por dominio da aplicacao.
 - [ ] Manter dois frontends base (webapp/admin).
 - [ ] Manter design system compartilhado.
 - [ ] Manter Material Design 3 como referencia visual oficial (`https://m3.material.io`).
