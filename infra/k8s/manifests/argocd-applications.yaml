@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: __PROJECT_SLUG__-api-gateway
+  namespace: __ARGOCD_NAMESPACE__
+spec:
+  project: default
+  source:
+    repoURL: __GIT_REPO_URL__
+    targetRevision: __GIT_DEFAULT_BRANCH__
+    path: infra/k8s/gitops/apps/api-gateway/overlays/__GITOPS_ENV__
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: __K8S_NAMESPACE__
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

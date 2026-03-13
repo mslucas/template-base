@@ -1,0 +1,35 @@
+global:
+  security:
+    allowInsecureImages: true
+
+image:
+  registry: docker.io
+  repository: bitnamilegacy/rabbitmq
+  tag: latest
+
+auth:
+  username: __PROJECT_SLUG__
+  existingPasswordSecret: rabbitmq-auth
+  existingErlangSecret: rabbitmq-auth
+
+extraPlugins: "rabbitmq_management"
+
+service:
+  type: ClusterIP
+
+ingress:
+  enabled: true
+  ingressClassName: nginx
+  hostname: __HOST_MQ__
+  path: /
+  pathType: Prefix
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "false"
+  tls: true
+
+persistence:
+  enabled: true
+  size: 10Gi
+

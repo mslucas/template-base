@@ -1,0 +1,233 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: __PROJECT_SLUG__-keycloak-theme-material
+  namespace: __K8S_NAMESPACE__
+data:
+  login-theme.properties: |-
+    parent=keycloak.v2
+    import=common/keycloak
+    styles=css/material.css
+  account-theme.properties: |-
+    parent=keycloak.v3
+    import=common/keycloak
+    styles=css/material.css
+  login-material.css: |-
+    :root {
+      --md-sys-color-primary: #005ac2;
+      --md-sys-color-on-primary: #ffffff;
+      --md-sys-color-surface: #f8f9ff;
+      --md-sys-color-on-surface: #1a1c20;
+      --md-sys-color-outline: #727785;
+      --md-sys-shape-corner: 16px;
+      --md-sys-elevation-1: 0 1px 2px rgba(26, 28, 32, 0.16), 0 2px 6px rgba(26, 28, 32, 0.1);
+    }
+
+    .login-pf body {
+      margin: 0;
+      background:
+        radial-gradient(circle at 0 0, rgba(0, 90, 194, 0.08), transparent 45%),
+        var(--md-sys-color-surface);
+      color: var(--md-sys-color-on-surface);
+      font-family: "Roboto", "Segoe UI", Arial, sans-serif;
+    }
+
+    #kc-header-wrapper {
+      color: var(--md-sys-color-on-surface);
+      font-size: 1.125rem;
+      font-weight: 700;
+      text-transform: none;
+    }
+
+    .card-pf {
+      border: 1px solid rgba(114, 119, 133, 0.32);
+      border-radius: var(--md-sys-shape-corner);
+      box-shadow: var(--md-sys-elevation-1);
+      background: #ffffff;
+      padding: 1.25rem 1.25rem 1rem;
+    }
+
+    .pf-c-form-control,
+    .form-control {
+      min-height: 2.75rem;
+      border-radius: 12px;
+      border: 1px solid var(--md-sys-color-outline);
+      padding: 0.5rem 0.875rem;
+      box-shadow: none;
+    }
+
+    .pf-c-form-control:focus,
+    .form-control:focus {
+      border-color: var(--md-sys-color-primary);
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(0, 90, 194, 0.2);
+      background: #ffffff;
+    }
+
+    .pf-c-button.pf-m-primary,
+    .btn-primary {
+      min-height: 2.75rem;
+      border: 0;
+      border-radius: 999px;
+      background: var(--md-sys-color-primary);
+      color: var(--md-sys-color-on-primary);
+      font-weight: 600;
+      padding: 0 1.125rem;
+    }
+
+    .pf-c-button.pf-m-primary:hover,
+    .btn-primary:hover {
+      filter: brightness(0.95);
+    }
+  account-material.css: |-
+    :root {
+      --md-sys-color-primary: #005ac2;
+      --md-sys-color-on-primary: #ffffff;
+      --md-sys-color-surface: #f8f9ff;
+      --md-sys-color-on-surface: #1a1c20;
+      --md-sys-color-outline: #727785;
+      --md-sys-shape-corner: 16px;
+      --md-sys-elevation-1: 0 1px 2px rgba(26, 28, 32, 0.16), 0 2px 6px rgba(26, 28, 32, 0.1);
+    }
+
+    body {
+      background:
+        radial-gradient(circle at 0 0, rgba(0, 90, 194, 0.08), transparent 45%),
+        var(--md-sys-color-surface);
+      color: var(--md-sys-color-on-surface);
+      font-family: "Roboto", "Segoe UI", Arial, sans-serif;
+    }
+
+    .pf-v5-c-card,
+    .pf-c-card {
+      border-radius: var(--md-sys-shape-corner);
+      border: 1px solid rgba(114, 119, 133, 0.28);
+      box-shadow: var(--md-sys-elevation-1);
+      background: #ffffff;
+    }
+
+    .pf-v5-c-button.pf-m-primary,
+    .pf-c-button.pf-m-primary {
+      border-radius: 999px;
+      background: var(--md-sys-color-primary);
+      color: var(--md-sys-color-on-primary);
+      border: 0;
+    }
+
+    .pf-v5-c-form-control,
+    .pf-c-form-control {
+      border-radius: 12px;
+      border: 1px solid var(--md-sys-color-outline);
+      background: #ffffff;
+    }
+
+    .pf-v5-c-form-control:focus,
+    .pf-c-form-control:focus {
+      border-color: var(--md-sys-color-primary);
+      box-shadow: 0 0 0 3px rgba(0, 90, 194, 0.2);
+      outline: none;
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keycloak
+  namespace: __K8S_NAMESPACE__
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: keycloak
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: keycloak
+    spec:
+      volumes:
+        - name: keycloak-theme-material
+          configMap:
+            name: __PROJECT_SLUG__-keycloak-theme-material
+            items:
+              - key: login-theme.properties
+                path: login/theme.properties
+              - key: login-material.css
+                path: login/resources/css/material.css
+              - key: account-theme.properties
+                path: account/theme.properties
+              - key: account-material.css
+                path: account/resources/css/material.css
+      containers:
+        - name: keycloak
+          image: quay.io/keycloak/keycloak:26.1
+          args:
+            - start
+            - --http-enabled=true
+            - --proxy-headers=xforwarded
+            - --hostname=https://__HOST_SSO__
+            - --hostname-strict=false
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: KC_DB
+              value: postgres
+            - name: KC_DB_URL
+              value: jdbc:postgresql://postgresql-shared.__K8S_NAMESPACE__.svc.cluster.local:5432/keycloak
+            - name: KC_DB_USERNAME
+              value: keycloak
+            - name: KC_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql-auth
+                  key: password
+            - name: KEYCLOAK_ADMIN
+              value: __KEYCLOAK_ADMIN_USERNAME__
+            - name: KEYCLOAK_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-admin-secret
+                  key: admin-password
+          volumeMounts:
+            - name: keycloak-theme-material
+              mountPath: /opt/keycloak/themes/__PROJECT_SLUG__-material
+              readOnly: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak
+  namespace: __K8S_NAMESPACE__
+spec:
+  selector:
+    app.kubernetes.io/name: keycloak
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: keycloak
+  namespace: __K8S_NAMESPACE__
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "false"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - __HOST_SSO__
+      secretName: __HOST_SSO__-tls
+  rules:
+    - host: __HOST_SSO__
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: keycloak
+                port:
+                  number: 80

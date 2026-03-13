@@ -1,0 +1,16 @@
+architecture: standalone
+auth:
+  enablePostgresUser: true
+  username: keycloak
+  database: keycloak
+  existingSecret: postgresql-auth
+  secretKeys:
+    adminPasswordKey: postgres-password
+    userPasswordKey: password
+primary:
+  persistence:
+    enabled: true
+    size: 30Gi
+metrics:
+  enabled: true
+

@@ -1,0 +1,16 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway
+  namespace: __K8S_NAMESPACE__
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+        - name: api-gateway
+          env:
+            - name: OTEL_ENVIRONMENT
+              value: prd
+            - name: OTEL_TRACES_SAMPLER_RATIO
+              value: "0.2"

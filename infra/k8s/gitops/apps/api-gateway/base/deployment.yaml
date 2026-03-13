@@ -1,0 +1,116 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway
+  namespace: __K8S_NAMESPACE__
+  labels:
+    app.kubernetes.io/name: api-gateway
+    app.kubernetes.io/part-of: __PROJECT_SLUG__
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: api-gateway
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: api-gateway
+        app.kubernetes.io/part-of: __PROJECT_SLUG__
+    spec:
+      serviceAccountName: __PROJECT_SLUG__-workload
+      automountServiceAccountToken: false
+      imagePullSecrets:
+        - name: ghcr-pull-secret
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: api-gateway
+          image: __API_IMAGE_REPO__:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: PORT
+              value: "8080"
+            - name: DEFAULT_TIMEZONE
+              value: "__DEFAULT_TIMEZONE__"
+            - name: AUTH_ENABLED
+              value: "true"
+            - name: AUTH_KEYCLOAK_ISSUER
+              value: https://__HOST_SSO__/realms/__KEYCLOAK_REALM__
+            - name: AUTH_KEYCLOAK_JWKS_URL
+              value: https://__HOST_SSO__/realms/__KEYCLOAK_REALM__/protocol/openid-connect/certs
+            - name: AUTH_ALLOWED_AUDIENCES
+              value: __WEBAPP_CLIENT_ID__,__ADMIN_CLIENT_ID__
+            - name: OTEL_ENABLED
+              value: "true"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: otel-collector.__K8S_NAMESPACE__.svc.cluster.local:4317
+            - name: OTEL_EXPORTER_OTLP_INSECURE
+              value: "true"
+            - name: OTEL_TRACES_SAMPLER_RATIO
+              value: "1.0"
+            - name: OTEL_ENVIRONMENT
+              value: base
+            - name: POSTGRES_HOST
+              value: postgresql-shared.__K8S_NAMESPACE__.svc.cluster.local
+            - name: POSTGRES_PORT
+              value: "5432"
+            - name: POSTGRES_DATABASE
+              value: __PROJECT_SLUG___core
+            - name: POSTGRES_USER
+              value: postgres
+            - name: POSTGRES_SSLMODE
+              value: disable
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql-auth
+                  key: postgres-password
+            - name: REDIS_ADDR
+              value: redis-master.__K8S_NAMESPACE__.svc.cluster.local:6379
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-auth
+                  key: redis-password
+            - name: RABBITMQ_HOST
+              value: rabbitmq.__K8S_NAMESPACE__.svc.cluster.local
+            - name: RABBITMQ_PORT
+              value: "5672"
+            - name: RABBITMQ_USER
+              value: __PROJECT_SLUG__
+            - name: RABBITMQ_VHOST
+              value: "/"
+            - name: RABBITMQ_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq-auth
+                  key: rabbitmq-password
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+          securityContext:
+            runAsNonRoot: true
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]

@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgresql-databases
+  namespace: __K8S_NAMESPACE__
+data:
+  PROJECT_DATABASES: "__PROJECT_SLUG___account __PROJECT_SLUG___core __PROJECT_SLUG___admin"
+

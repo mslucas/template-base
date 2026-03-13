@@ -1,0 +1,1749 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: webapp-static
+  namespace: __K8S_NAMESPACE__
+data:
+  index.html: |
+    <!doctype html>
+    <html lang="pt-BR">
+      <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Template WebApp</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap"
+          rel="stylesheet"
+        />
+        <link rel="stylesheet" href="../design-system/tokens.css" />
+        <script type="importmap">
+          {
+            "imports": {
+              "react": "https://esm.sh/react@18.3.1",
+              "react-dom/client": "https://esm.sh/react-dom@18.3.1/client"
+            }
+          }
+        </script>
+      </head>
+      <body>
+        <div id="root"></div>
+        <script type="module" src="./main.js"></script>
+      </body>
+    </html>
+  main.js: |
+    import React from "react";
+    import { createRoot } from "react-dom/client";
+    import { Button, KeyValue, Panel, Shell } from "../design-system/components.js";
+    import {
+      fetchPlatformMeta,
+      fetchSecureTemplateData,
+      probeWebSocket,
+    } from "../shared/platform-client.js";
+    import {
+      getActiveSession,
+      getAuthenticatedUser,
+      handleLoginCallback,
+      logoutFromKeycloak,
+      startLoginFlow,
+    } from "../shared/auth-client.js";
+    
+    const h = React.createElement;
+    
+    function WebApp() {
+      const [authState, setAuthState] = React.useState({
+        loading: true,
+        authenticated: false,
+        user: null,
+        error: "",
+      });
+      const [metaState, setMetaState] = React.useState({ loading: true, data: null, error: "" });
+      const [wsState, setWsState] = React.useState({ loading: true, data: null, error: "" });
+      const [secureState, setSecureState] = React.useState({ loading: false, data: null, error: "" });
+    
+      React.useEffect(() => {
+        let alive = true;
+    
+        (async () => {
+          try {
+            await handleLoginCallback({ appKind: "webapp" });
+            const user = getAuthenticatedUser({ appKind: "webapp" });
+            if (!alive) {
+              return;
+            }
+            setAuthState({ loading: false, authenticated: Boolean(user), user, error: "" });
+          } catch (error) {
+            if (!alive) {
+              return;
+            }
+            setAuthState({
+              loading: false,
+              authenticated: false,
+              user: null,
+              error: error.message || "falha no login SSO",
+            });
+          }
+        })();
+    
+        return () => {
+          alive = false;
+        };
+      }, []);
+    
+      React.useEffect(() => {
+        let alive = true;
+        const controller = new AbortController();
+    
+        fetchPlatformMeta({ signal: controller.signal })
+          .then((result) => {
+            if (!alive) {
+              return;
+            }
+            setMetaState({ loading: false, data: result, error: "" });
+          })
+          .catch((error) => {
+            if (!alive) {
+              return;
+            }
+            setMetaState({ loading: false, data: null, error: error.message || "meta indisponivel" });
+          });
+    
+        probeWebSocket()
+          .then((result) => {
+            if (!alive) {
+              return;
+            }
+            setWsState({ loading: false, data: result, error: "" });
+          })
+          .catch((error) => {
+            if (!alive) {
+              return;
+            }
+            setWsState({ loading: false, data: null, error: error.message || "ws indisponivel" });
+          });
+    
+        return () => {
+          alive = false;
+          controller.abort();
+        };
+      }, []);
+    
+      React.useEffect(() => {
+        let alive = true;
+        const session = getActiveSession({ appKind: "webapp" });
+        if (!session?.access_token) {
+          setSecureState({ loading: false, data: null, error: "" });
+          return undefined;
+        }
+    
+        const controller = new AbortController();
+        setSecureState({ loading: true, data: null, error: "" });
+        fetchSecureTemplateData({
+          accessToken: session.access_token,
+          signal: controller.signal,
+        })
+          .then((payload) => {
+            if (!alive) {
+              return;
+            }
+            setSecureState({ loading: false, data: payload, error: "" });
+          })
+          .catch((error) => {
+            if (!alive) {
+              return;
+            }
+            setSecureState({ loading: false, data: null, error: error.message || "falha em endpoint protegido" });
+          });
+    
+        return () => {
+          alive = false;
+          controller.abort();
+        };
+      }, [authState.authenticated]);
+    
+      return h(
+        Shell,
+        {
+          title: "Template WebApp",
+          subtitle: "Base tecnica para novos produtos com React + Keycloak + API Gateway",
+          actions: authState.authenticated
+            ? h(Button, { label: "Sair", variant: "secondary", onClick: () => logoutFromKeycloak({ appKind: "webapp" }) })
+            : h(Button, {
+                label: "Entrar com SSO",
+                onClick: () => startLoginFlow({ appKind: "webapp" }).catch((error) => {
+                  setAuthState((current) => ({ ...current, error: error.message || "falha no login" }));
+                }),
+              }),
+        },
+        h(
+          "div",
+          { className: "tpl-grid" },
+          h(
+            Panel,
+            { title: "Sessao SSO" },
+            authState.loading
+              ? h("p", { className: "tpl-note" }, "Carregando estado de autenticacao...")
+              : h(
+                  React.Fragment,
+                  null,
+                  h(KeyValue, { label: "Autenticado", value: authState.authenticated ? "sim" : "nao" }),
+                  h(KeyValue, { label: "Usuario", value: authState.user?.username || "-" }),
+                  h(KeyValue, { label: "Roles", value: (authState.user?.roles || []).join(", ") || "-" }),
+                  authState.error ? h("p", { className: "tpl-note" }, `Erro: ${authState.error}`) : null,
+                ),
+          ),
+          h(
+            Panel,
+            { title: "API Gateway /meta" },
+            metaState.loading
+              ? h("p", { className: "tpl-note" }, "Consultando /api/v1/platform/meta...")
+              : h(
+                  React.Fragment,
+                  null,
+                  h(KeyValue, { label: "Base URL", value: metaState.data?.baseUrl || "-" }),
+                  h(KeyValue, { label: "Service", value: metaState.data?.payload?.service || "-" }),
+                  h(KeyValue, { label: "Version", value: metaState.data?.payload?.version || "-" }),
+                  h(KeyValue, { label: "Runtime", value: metaState.data?.payload?.runtime || "-" }),
+                  metaState.error ? h("p", { className: "tpl-note" }, `Erro: ${metaState.error}`) : null,
+                ),
+          ),
+          h(
+            Panel,
+            { title: "WebSocket /ws" },
+            wsState.loading
+              ? h("p", { className: "tpl-note" }, "Testando conexao websocket...")
+              : h(
+                  React.Fragment,
+                  null,
+                  h(KeyValue, { label: "URL", value: wsState.data?.wsUrl || "-" }),
+                  h(KeyValue, { label: "Latencia", value: wsState.data ? `${wsState.data.latencyMs} ms` : "-" }),
+                  wsState.error ? h("p", { className: "tpl-note" }, `Erro: ${wsState.error}`) : null,
+                ),
+          ),
+          h(
+            Panel,
+            { title: "Endpoint protegido" },
+            secureState.loading
+              ? h("p", { className: "tpl-note" }, "Validando token em /api/v1/template/secure...")
+              : h(
+                  React.Fragment,
+                  null,
+                  h(KeyValue, {
+                    label: "Resultado",
+                    value: secureState.data?.status || (authState.authenticated ? "sem resposta" : "login necessario"),
+                  }),
+                  h(KeyValue, {
+                    label: "Principal",
+                    value: secureState.data?.principal || "-",
+                  }),
+                  secureState.error ? h("p", { className: "tpl-note" }, `Erro: ${secureState.error}`) : null,
+                ),
+          ),
+        ),
+      );
+    }
+    
+    createRoot(document.getElementById("root")).render(h(WebApp));
+  design-system-components.js: |
+    import React from "react";
+    
+    const h = React.createElement;
+    
+    export function Shell({ title, subtitle, children, actions }) {
+      return h(
+        "main",
+        { className: "tpl-shell" },
+        h(
+          "header",
+          { className: "tpl-header" },
+          h(
+            "div",
+            null,
+            h("h1", { className: "tpl-title" }, title),
+            subtitle ? h("p", { className: "tpl-subtitle" }, subtitle) : null,
+          ),
+          actions ? h("div", { className: "tpl-actions" }, actions) : null,
+        ),
+        h("section", { className: "tpl-content" }, children),
+      );
+    }
+    
+    export function Panel({ title, children }) {
+      return h(
+        "article",
+        { className: "tpl-panel" },
+        title ? h("h2", { className: "tpl-panel-title" }, title) : null,
+        children,
+      );
+    }
+    
+    export function KeyValue({ label, value }) {
+      return h(
+        "div",
+        { className: "tpl-kv-row" },
+        h("span", { className: "tpl-kv-label" }, label),
+        h("code", { className: "tpl-kv-value" }, value),
+      );
+    }
+    
+    export function Button({ label, onClick, type = "button", variant = "primary", disabled = false }) {
+      return h(
+        "button",
+        {
+          className: `tpl-btn tpl-btn-${variant}`,
+          onClick,
+          type,
+          disabled,
+        },
+        label,
+      );
+    }
+  design-system-tokens.css: |
+    :root {
+      --tpl-bg: #eef3f6;
+      --tpl-surface: #ffffff;
+      --tpl-border: #d5e2e9;
+      --tpl-text: #13222d;
+      --tpl-muted: #566774;
+      --tpl-primary: #0b6c8f;
+      --tpl-primary-strong: #095777;
+    }
+    
+    * {
+      box-sizing: border-box;
+    }
+    
+    body {
+      margin: 0;
+      font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif;
+      color: var(--tpl-text);
+      background: linear-gradient(180deg, #f4f8fb 0%, var(--tpl-bg) 100%);
+    }
+    
+    .tpl-shell {
+      max-width: 1100px;
+      margin: 0 auto;
+      min-height: 100vh;
+      padding: 24px 16px 48px;
+    }
+    
+    .tpl-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+    
+    .tpl-title {
+      margin: 0;
+    }
+    
+    .tpl-subtitle {
+      margin: 4px 0 0;
+      color: var(--tpl-muted);
+    }
+    
+    .tpl-content {
+      display: grid;
+      gap: 12px;
+    }
+    
+    .tpl-grid {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    }
+    
+    .tpl-panel {
+      background: var(--tpl-surface);
+      border: 1px solid var(--tpl-border);
+      border-radius: 14px;
+      padding: 16px;
+    }
+    
+    .tpl-panel-title {
+      margin: 0 0 12px;
+      font-size: 1rem;
+    }
+    
+    .tpl-actions {
+      display: flex;
+      gap: 8px;
+    }
+    
+    .tpl-kv-row {
+      display: grid;
+      gap: 4px;
+      margin-bottom: 10px;
+    }
+    
+    .tpl-kv-label {
+      color: var(--tpl-muted);
+      font-size: 0.85rem;
+    }
+    
+    .tpl-kv-value {
+      background: #eef5f9;
+      border: 1px solid #d6e5ec;
+      border-radius: 8px;
+      padding: 4px 8px;
+      font-size: 0.82rem;
+      color: #0d2a3a;
+      overflow-wrap: anywhere;
+    }
+    
+    .tpl-btn {
+      border: 0;
+      border-radius: 10px;
+      padding: 10px 12px;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    
+    .tpl-btn-primary {
+      background: var(--tpl-primary);
+      color: #fff;
+    }
+    
+    .tpl-btn-primary:hover {
+      background: var(--tpl-primary-strong);
+    }
+    
+    .tpl-btn-secondary {
+      background: #e8f1f6;
+      color: var(--tpl-text);
+    }
+    
+    .tpl-note {
+      margin: 0;
+      color: var(--tpl-muted);
+    }
+  shared-platform-client.js: |
+    import { resolveApiBaseUrl, resolveWebSocketUrl } from "./runtime-config.js";
+    
+    export async function fetchPlatformMeta({ signal } = {}) {
+      const baseUrl = resolveApiBaseUrl();
+      const response = await fetch(`${baseUrl}/api/v1/platform/meta`, {
+        signal,
+        headers: { Accept: "application/json" },
+      });
+      if (!response.ok) {
+        throw new Error(`platform meta request failed (${response.status})`);
+      }
+      const payload = await response.json();
+      return { baseUrl, payload };
+    }
+    
+    export async function fetchSecureTemplateData({ accessToken, signal } = {}) {
+      const baseUrl = resolveApiBaseUrl();
+      const response = await fetch(`${baseUrl}/api/v1/template/secure`, {
+        signal,
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+      if (!response.ok) {
+        throw new Error(`secure endpoint request failed (${response.status})`);
+      }
+      return response.json();
+    }
+    
+    export function probeWebSocket({ timeoutMs = 4000 } = {}) {
+      const wsUrl = resolveWebSocketUrl();
+      return new Promise((resolve, reject) => {
+        const startedAt = Date.now();
+        const socket = new WebSocket(wsUrl);
+        const timeout = window.setTimeout(() => {
+          socket.close();
+          reject(new Error("websocket timeout"));
+        }, timeoutMs);
+    
+        socket.onopen = () => socket.send("tpl:ping");
+        socket.onmessage = () => {
+          window.clearTimeout(timeout);
+          socket.close();
+          resolve({ latencyMs: Date.now() - startedAt, wsUrl });
+        };
+        socket.onerror = () => {
+          window.clearTimeout(timeout);
+          reject(new Error("websocket probe failed"));
+        };
+      });
+    }
+  shared-runtime-config.js: |
+    const DEFAULT_API_BASE_URL = "https://__HOST_API__";
+    const DEFAULT_KEYCLOAK_BASE_URL = "https://__HOST_SSO__";
+    const DEFAULT_KEYCLOAK_REALM = "__KEYCLOAK_REALM__";
+    
+    function readGlobal(name) {
+      if (typeof window === "undefined") {
+        return "";
+      }
+      const value = window[name];
+      return typeof value === "string" ? value.trim() : "";
+    }
+    
+    export function resolveApiBaseUrl() {
+      const explicit = readGlobal("TEMPLATE_API_BASE_URL");
+      if (explicit) {
+        return explicit.replace(/\/$/, "");
+      }
+      return DEFAULT_API_BASE_URL;
+    }
+    
+    export function resolveWebSocketUrl() {
+      const explicit = readGlobal("TEMPLATE_WS_URL");
+      if (explicit) {
+        return explicit;
+      }
+      const parsed = new URL(resolveApiBaseUrl());
+      parsed.protocol = parsed.protocol === "https:" ? "wss:" : "ws:";
+      parsed.pathname = "/ws";
+      parsed.search = "";
+      return parsed.toString();
+    }
+    
+    export function resolveKeycloakBaseUrl() {
+      return readGlobal("TEMPLATE_KEYCLOAK_BASE_URL") || DEFAULT_KEYCLOAK_BASE_URL;
+    }
+    
+    export function resolveKeycloakRealm() {
+      return readGlobal("TEMPLATE_KEYCLOAK_REALM") || DEFAULT_KEYCLOAK_REALM;
+    }
+    
+    export function resolveClientId(appKind) {
+      if (appKind === "admin") {
+        return readGlobal("TEMPLATE_ADMIN_CLIENT_ID") || "__ADMIN_CLIENT_ID__";
+      }
+      return readGlobal("TEMPLATE_WEBAPP_CLIENT_ID") || "__WEBAPP_CLIENT_ID__";
+    }
+    
+  shared-auth-client.js: |
+    import { resolveClientId, resolveKeycloakBaseUrl, resolveKeycloakRealm } from "./runtime-config.js";
+    
+    const WELL_KNOWN_CACHE = new Map();
+    const STORAGE_PREFIX = "template.auth";
+    
+    function sessionStorageKey(clientId) {
+      return `${STORAGE_PREFIX}.session.${clientId}`;
+    }
+    
+    function txStorageKey(clientId) {
+      return `${STORAGE_PREFIX}.tx.${clientId}`;
+    }
+    
+    function nowEpochSeconds() {
+      return Math.floor(Date.now() / 1000);
+    }
+    
+    function base64UrlEncode(byteArray) {
+      const binary = String.fromCharCode(...byteArray);
+      return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+    }
+    
+    function base64UrlDecodeToString(input) {
+      const normalized = input.replace(/-/g, "+").replace(/_/g, "/");
+      const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
+      return atob(padded);
+    }
+    
+    function randomString(byteSize = 32) {
+      const bytes = new Uint8Array(byteSize);
+      window.crypto.getRandomValues(bytes);
+      return base64UrlEncode(bytes);
+    }
+    
+    async function sha256Base64Url(value) {
+      const encoder = new TextEncoder();
+      const buffer = encoder.encode(value);
+      const digest = await window.crypto.subtle.digest("SHA-256", buffer);
+      return base64UrlEncode(new Uint8Array(digest));
+    }
+    
+    async function fetchWellKnown() {
+      const baseUrl = resolveKeycloakBaseUrl();
+      const realm = resolveKeycloakRealm();
+      const cacheKey = `${baseUrl}|${realm}`;
+    
+      if (WELL_KNOWN_CACHE.has(cacheKey)) {
+        return WELL_KNOWN_CACHE.get(cacheKey);
+      }
+    
+      const response = await fetch(`${baseUrl}/realms/${realm}/.well-known/openid-configuration`, {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+        },
+      });
+    
+      if (!response.ok) {
+        throw new Error(`oidc discovery failed (${response.status})`);
+      }
+    
+      const payload = await response.json();
+      WELL_KNOWN_CACHE.set(cacheKey, payload);
+      return payload;
+    }
+    
+    export function decodeJwtPayload(token) {
+      if (!token || typeof token !== "string") {
+        return null;
+      }
+      const pieces = token.split(".");
+      if (pieces.length < 2) {
+        return null;
+      }
+    
+      try {
+        const payload = base64UrlDecodeToString(pieces[1]);
+        return JSON.parse(payload);
+      } catch {
+        return null;
+      }
+    }
+    
+    export function getActiveSession({ appKind }) {
+      const clientId = resolveClientId(appKind);
+      const raw = window.sessionStorage.getItem(sessionStorageKey(clientId));
+      if (!raw) {
+        return null;
+      }
+    
+      try {
+        const parsed = JSON.parse(raw);
+        if (!parsed || !parsed.access_token || !parsed.expires_at) {
+          return null;
+        }
+    
+        if (parsed.expires_at <= nowEpochSeconds() + 15) {
+          window.sessionStorage.removeItem(sessionStorageKey(clientId));
+          return null;
+        }
+    
+        return parsed;
+      } catch {
+        window.sessionStorage.removeItem(sessionStorageKey(clientId));
+        return null;
+      }
+    }
+    
+    export function getAuthenticatedUser({ appKind }) {
+      const session = getActiveSession({ appKind });
+      if (!session) {
+        return null;
+      }
+    
+      const claims = decodeJwtPayload(session.id_token) || decodeJwtPayload(session.access_token) || {};
+      const realmRoles = claims?.realm_access?.roles || [];
+    
+      return {
+        username: claims.preferred_username || claims.email || "usuario",
+        name: claims.name || claims.given_name || "",
+        email: claims.email || "",
+        roles: Array.isArray(realmRoles) ? realmRoles : [],
+        accessToken: session.access_token,
+        expiresAt: session.expires_at,
+      };
+    }
+    
+    export async function startLoginFlow({ appKind }) {
+      const clientId = resolveClientId(appKind);
+      const redirectUri = `${window.location.origin}${window.location.pathname}`;
+    
+      const verifier = randomString(64);
+      const challenge = await sha256Base64Url(verifier);
+      const state = randomString(24);
+      const nonce = randomString(24);
+    
+      window.sessionStorage.setItem(
+        txStorageKey(clientId),
+        JSON.stringify({
+          verifier,
+          state,
+          nonce,
+          redirectUri,
+          appKind,
+          created_at: nowEpochSeconds(),
+        }),
+      );
+    
+      const discovery = await fetchWellKnown();
+      const url = new URL(discovery.authorization_endpoint);
+      url.searchParams.set("client_id", clientId);
+      url.searchParams.set("redirect_uri", redirectUri);
+      url.searchParams.set("response_type", "code");
+      url.searchParams.set("scope", "openid profile email");
+      url.searchParams.set("state", state);
+      url.searchParams.set("nonce", nonce);
+      url.searchParams.set("code_challenge", challenge);
+      url.searchParams.set("code_challenge_method", "S256");
+    
+      window.location.assign(url.toString());
+    }
+    
+    export async function handleLoginCallback({ appKind }) {
+      const clientId = resolveClientId(appKind);
+      const current = new URL(window.location.href);
+      const code = current.searchParams.get("code");
+      const state = current.searchParams.get("state");
+      const error = current.searchParams.get("error");
+    
+      if (error) {
+        throw new Error(`oidc callback error: ${error}`);
+      }
+    
+      if (!code || !state) {
+        return false;
+      }
+    
+      const txRaw = window.sessionStorage.getItem(txStorageKey(clientId));
+      if (!txRaw) {
+        throw new Error("oidc transaction not found");
+      }
+    
+      let tx;
+      try {
+        tx = JSON.parse(txRaw);
+      } catch {
+        throw new Error("oidc transaction invalid");
+      }
+    
+      if (!tx || tx.state !== state || !tx.verifier || !tx.redirectUri) {
+        throw new Error("oidc state mismatch");
+      }
+    
+      const discovery = await fetchWellKnown();
+      const tokenResponse = await fetch(discovery.token_endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          Accept: "application/json",
+        },
+        body: new URLSearchParams({
+          grant_type: "authorization_code",
+          client_id: clientId,
+          code,
+          redirect_uri: tx.redirectUri,
+          code_verifier: tx.verifier,
+        }).toString(),
+      });
+    
+      if (!tokenResponse.ok) {
+        const body = await tokenResponse.text();
+        throw new Error(`token exchange failed (${tokenResponse.status}): ${body}`);
+      }
+    
+      const tokenPayload = await tokenResponse.json();
+      const expiresIn = Number(tokenPayload.expires_in || 0);
+    
+      const session = {
+        access_token: tokenPayload.access_token,
+        id_token: tokenPayload.id_token,
+        refresh_token: tokenPayload.refresh_token,
+        token_type: tokenPayload.token_type,
+        scope: tokenPayload.scope,
+        issued_at: nowEpochSeconds(),
+        expires_at: nowEpochSeconds() + Math.max(expiresIn, 60),
+      };
+    
+      window.sessionStorage.setItem(sessionStorageKey(clientId), JSON.stringify(session));
+      window.sessionStorage.removeItem(txStorageKey(clientId));
+    
+      window.history.replaceState({}, document.title, tx.redirectUri);
+      return true;
+    }
+    
+    export async function logoutFromKeycloak({ appKind }) {
+      const clientId = resolveClientId(appKind);
+      const session = getActiveSession({ appKind });
+      const redirectUri = `${window.location.origin}${window.location.pathname}`;
+    
+      window.sessionStorage.removeItem(sessionStorageKey(clientId));
+      window.sessionStorage.removeItem(txStorageKey(clientId));
+    
+      if (!session?.id_token) {
+        window.location.assign(redirectUri);
+        return;
+      }
+    
+      try {
+        const discovery = await fetchWellKnown();
+        const endpoint = discovery.end_session_endpoint;
+        if (!endpoint) {
+          window.location.assign(redirectUri);
+          return;
+        }
+    
+        const logoutUrl = new URL(endpoint);
+        logoutUrl.searchParams.set("id_token_hint", session.id_token);
+        logoutUrl.searchParams.set("post_logout_redirect_uri", redirectUri);
+        logoutUrl.searchParams.set("client_id", clientId);
+        window.location.assign(logoutUrl.toString());
+      } catch {
+        window.location.assign(redirectUri);
+      }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webapp-placeholder
+  namespace: __K8S_NAMESPACE__
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: webapp-placeholder
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: webapp-placeholder
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.27.5-alpine
+          ports:
+            - name: http
+              containerPort: 80
+          volumeMounts:
+            - name: static-site
+              mountPath: /usr/share/nginx/html
+              readOnly: true
+      volumes:
+        - name: static-site
+          configMap:
+            name: webapp-static
+            items:
+              - key: index.html
+                path: index.html
+              - key: main.js
+                path: main.js
+              - key: design-system-components.js
+                path: design-system/components.js
+              - key: design-system-tokens.css
+                path: design-system/tokens.css
+              - key: shared-platform-client.js
+                path: shared/platform-client.js
+              - key: shared-runtime-config.js
+                path: shared/runtime-config.js
+              - key: shared-auth-client.js
+                path: shared/auth-client.js
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: webapp-placeholder
+  namespace: __K8S_NAMESPACE__
+spec:
+  selector:
+    app.kubernetes.io/name: webapp-placeholder
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: admin-static
+  namespace: __K8S_NAMESPACE__
+data:
+  index.html: |
+    <!doctype html>
+    <html lang="pt-BR">
+      <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Template Admin</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap"
+          rel="stylesheet"
+        />
+        <link rel="stylesheet" href="../design-system/tokens.css" />
+        <script type="importmap">
+          {
+            "imports": {
+              "react": "https://esm.sh/react@18.3.1",
+              "react-dom/client": "https://esm.sh/react-dom@18.3.1/client"
+            }
+          }
+        </script>
+      </head>
+      <body>
+        <div id="root"></div>
+        <script type="module" src="./main.js"></script>
+      </body>
+    </html>
+  main.js: |
+    import React from "react";
+    import { createRoot } from "react-dom/client";
+    import { Button, KeyValue, Panel, Shell } from "../design-system/components.js";
+    import {
+      fetchPlatformMeta,
+      fetchSecureTemplateData,
+      probeWebSocket,
+    } from "../shared/platform-client.js";
+    import {
+      getActiveSession,
+      getAuthenticatedUser,
+      handleLoginCallback,
+      logoutFromKeycloak,
+      startLoginFlow,
+    } from "../shared/auth-client.js";
+    
+    const h = React.createElement;
+    
+    function AdminApp() {
+      const [authState, setAuthState] = React.useState({
+        loading: true,
+        authenticated: false,
+        user: null,
+        error: "",
+      });
+      const [metaState, setMetaState] = React.useState({ loading: true, data: null, error: "" });
+      const [wsState, setWsState] = React.useState({ loading: true, data: null, error: "" });
+      const [secureState, setSecureState] = React.useState({ loading: false, data: null, error: "" });
+    
+      React.useEffect(() => {
+        let alive = true;
+    
+        (async () => {
+          try {
+            await handleLoginCallback({ appKind: "admin" });
+            const user = getAuthenticatedUser({ appKind: "admin" });
+            if (!alive) {
+              return;
+            }
+            setAuthState({ loading: false, authenticated: Boolean(user), user, error: "" });
+          } catch (error) {
+            if (!alive) {
+              return;
+            }
+            setAuthState({
+              loading: false,
+              authenticated: false,
+              user: null,
+              error: error.message || "falha no login SSO",
+            });
+          }
+        })();
+    
+        return () => {
+          alive = false;
+        };
+      }, []);
+    
+      React.useEffect(() => {
+        let alive = true;
+        const controller = new AbortController();
+    
+        fetchPlatformMeta({ signal: controller.signal })
+          .then((result) => {
+            if (!alive) {
+              return;
+            }
+            setMetaState({ loading: false, data: result, error: "" });
+          })
+          .catch((error) => {
+            if (!alive) {
+              return;
+            }
+            setMetaState({ loading: false, data: null, error: error.message || "meta indisponivel" });
+          });
+    
+        probeWebSocket()
+          .then((result) => {
+            if (!alive) {
+              return;
+            }
+            setWsState({ loading: false, data: result, error: "" });
+          })
+          .catch((error) => {
+            if (!alive) {
+              return;
+            }
+            setWsState({ loading: false, data: null, error: error.message || "ws indisponivel" });
+          });
+    
+        return () => {
+          alive = false;
+          controller.abort();
+        };
+      }, []);
+    
+      React.useEffect(() => {
+        let alive = true;
+        const session = getActiveSession({ appKind: "admin" });
+        if (!session?.access_token) {
+          setSecureState({ loading: false, data: null, error: "" });
+          return undefined;
+        }
+    
+        const controller = new AbortController();
+        setSecureState({ loading: true, data: null, error: "" });
+        fetchSecureTemplateData({
+          accessToken: session.access_token,
+          signal: controller.signal,
+        })
+          .then((payload) => {
+            if (!alive) {
+              return;
+            }
+            setSecureState({ loading: false, data: payload, error: "" });
+          })
+          .catch((error) => {
+            if (!alive) {
+              return;
+            }
+            setSecureState({ loading: false, data: null, error: error.message || "falha em endpoint protegido" });
+          });
+    
+        return () => {
+          alive = false;
+          controller.abort();
+        };
+      }, [authState.authenticated]);
+    
+      return h(
+        Shell,
+        {
+          title: "Template Admin",
+          subtitle: "Backoffice tecnico inicial para operacao da plataforma",
+          actions: authState.authenticated
+            ? h(Button, { label: "Sair", variant: "secondary", onClick: () => logoutFromKeycloak({ appKind: "admin" }) })
+            : h(Button, {
+                label: "Entrar com SSO",
+                onClick: () => startLoginFlow({ appKind: "admin" }).catch((error) => {
+                  setAuthState((current) => ({ ...current, error: error.message || "falha no login" }));
+                }),
+              }),
+        },
+        h(
+          "div",
+          { className: "tpl-grid" },
+          h(
+            Panel,
+            { title: "Sessao SSO" },
+            authState.loading
+              ? h("p", { className: "tpl-note" }, "Carregando estado de autenticacao...")
+              : h(
+                  React.Fragment,
+                  null,
+                  h(KeyValue, { label: "Autenticado", value: authState.authenticated ? "sim" : "nao" }),
+                  h(KeyValue, { label: "Usuario", value: authState.user?.username || "-" }),
+                  h(KeyValue, { label: "Roles", value: (authState.user?.roles || []).join(", ") || "-" }),
+                  authState.error ? h("p", { className: "tpl-note" }, `Erro: ${authState.error}`) : null,
+                ),
+          ),
+          h(
+            Panel,
+            { title: "API Gateway /meta" },
+            metaState.loading
+              ? h("p", { className: "tpl-note" }, "Consultando /api/v1/platform/meta...")
+              : h(
+                  React.Fragment,
+                  null,
+                  h(KeyValue, { label: "Base URL", value: metaState.data?.baseUrl || "-" }),
+                  h(KeyValue, { label: "Service", value: metaState.data?.payload?.service || "-" }),
+                  h(KeyValue, { label: "Version", value: metaState.data?.payload?.version || "-" }),
+                  h(KeyValue, { label: "Runtime", value: metaState.data?.payload?.runtime || "-" }),
+                  metaState.error ? h("p", { className: "tpl-note" }, `Erro: ${metaState.error}`) : null,
+                ),
+          ),
+          h(
+            Panel,
+            { title: "WebSocket /ws" },
+            wsState.loading
+              ? h("p", { className: "tpl-note" }, "Testando conexao websocket...")
+              : h(
+                  React.Fragment,
+                  null,
+                  h(KeyValue, { label: "URL", value: wsState.data?.wsUrl || "-" }),
+                  h(KeyValue, { label: "Latencia", value: wsState.data ? `${wsState.data.latencyMs} ms` : "-" }),
+                  wsState.error ? h("p", { className: "tpl-note" }, `Erro: ${wsState.error}`) : null,
+                ),
+          ),
+          h(
+            Panel,
+            { title: "Endpoint protegido" },
+            secureState.loading
+              ? h("p", { className: "tpl-note" }, "Validando token em /api/v1/template/secure...")
+              : h(
+                  React.Fragment,
+                  null,
+                  h(KeyValue, {
+                    label: "Resultado",
+                    value: secureState.data?.status || (authState.authenticated ? "sem resposta" : "login necessario"),
+                  }),
+                  h(KeyValue, {
+                    label: "Principal",
+                    value: secureState.data?.principal || "-",
+                  }),
+                  secureState.error ? h("p", { className: "tpl-note" }, `Erro: ${secureState.error}`) : null,
+                ),
+          ),
+        ),
+      );
+    }
+    
+    createRoot(document.getElementById("root")).render(h(AdminApp));
+  design-system-components.js: |
+    import React from "react";
+    
+    const h = React.createElement;
+    
+    export function Shell({ title, subtitle, children, actions }) {
+      return h(
+        "main",
+        { className: "tpl-shell" },
+        h(
+          "header",
+          { className: "tpl-header" },
+          h(
+            "div",
+            null,
+            h("h1", { className: "tpl-title" }, title),
+            subtitle ? h("p", { className: "tpl-subtitle" }, subtitle) : null,
+          ),
+          actions ? h("div", { className: "tpl-actions" }, actions) : null,
+        ),
+        h("section", { className: "tpl-content" }, children),
+      );
+    }
+    
+    export function Panel({ title, children }) {
+      return h(
+        "article",
+        { className: "tpl-panel" },
+        title ? h("h2", { className: "tpl-panel-title" }, title) : null,
+        children,
+      );
+    }
+    
+    export function KeyValue({ label, value }) {
+      return h(
+        "div",
+        { className: "tpl-kv-row" },
+        h("span", { className: "tpl-kv-label" }, label),
+        h("code", { className: "tpl-kv-value" }, value),
+      );
+    }
+    
+    export function Button({ label, onClick, type = "button", variant = "primary", disabled = false }) {
+      return h(
+        "button",
+        {
+          className: `tpl-btn tpl-btn-${variant}`,
+          onClick,
+          type,
+          disabled,
+        },
+        label,
+      );
+    }
+  design-system-tokens.css: |
+    :root {
+      --tpl-bg: #eef3f6;
+      --tpl-surface: #ffffff;
+      --tpl-border: #d5e2e9;
+      --tpl-text: #13222d;
+      --tpl-muted: #566774;
+      --tpl-primary: #0b6c8f;
+      --tpl-primary-strong: #095777;
+    }
+    
+    * {
+      box-sizing: border-box;
+    }
+    
+    body {
+      margin: 0;
+      font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif;
+      color: var(--tpl-text);
+      background: linear-gradient(180deg, #f4f8fb 0%, var(--tpl-bg) 100%);
+    }
+    
+    .tpl-shell {
+      max-width: 1100px;
+      margin: 0 auto;
+      min-height: 100vh;
+      padding: 24px 16px 48px;
+    }
+    
+    .tpl-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+    
+    .tpl-title {
+      margin: 0;
+    }
+    
+    .tpl-subtitle {
+      margin: 4px 0 0;
+      color: var(--tpl-muted);
+    }
+    
+    .tpl-content {
+      display: grid;
+      gap: 12px;
+    }
+    
+    .tpl-grid {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    }
+    
+    .tpl-panel {
+      background: var(--tpl-surface);
+      border: 1px solid var(--tpl-border);
+      border-radius: 14px;
+      padding: 16px;
+    }
+    
+    .tpl-panel-title {
+      margin: 0 0 12px;
+      font-size: 1rem;
+    }
+    
+    .tpl-actions {
+      display: flex;
+      gap: 8px;
+    }
+    
+    .tpl-kv-row {
+      display: grid;
+      gap: 4px;
+      margin-bottom: 10px;
+    }
+    
+    .tpl-kv-label {
+      color: var(--tpl-muted);
+      font-size: 0.85rem;
+    }
+    
+    .tpl-kv-value {
+      background: #eef5f9;
+      border: 1px solid #d6e5ec;
+      border-radius: 8px;
+      padding: 4px 8px;
+      font-size: 0.82rem;
+      color: #0d2a3a;
+      overflow-wrap: anywhere;
+    }
+    
+    .tpl-btn {
+      border: 0;
+      border-radius: 10px;
+      padding: 10px 12px;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    
+    .tpl-btn-primary {
+      background: var(--tpl-primary);
+      color: #fff;
+    }
+    
+    .tpl-btn-primary:hover {
+      background: var(--tpl-primary-strong);
+    }
+    
+    .tpl-btn-secondary {
+      background: #e8f1f6;
+      color: var(--tpl-text);
+    }
+    
+    .tpl-note {
+      margin: 0;
+      color: var(--tpl-muted);
+    }
+  shared-platform-client.js: |
+    import { resolveApiBaseUrl, resolveWebSocketUrl } from "./runtime-config.js";
+    
+    export async function fetchPlatformMeta({ signal } = {}) {
+      const baseUrl = resolveApiBaseUrl();
+      const response = await fetch(`${baseUrl}/api/v1/platform/meta`, {
+        signal,
+        headers: { Accept: "application/json" },
+      });
+      if (!response.ok) {
+        throw new Error(`platform meta request failed (${response.status})`);
+      }
+      const payload = await response.json();
+      return { baseUrl, payload };
+    }
+    
+    export async function fetchSecureTemplateData({ accessToken, signal } = {}) {
+      const baseUrl = resolveApiBaseUrl();
+      const response = await fetch(`${baseUrl}/api/v1/template/secure`, {
+        signal,
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+      if (!response.ok) {
+        throw new Error(`secure endpoint request failed (${response.status})`);
+      }
+      return response.json();
+    }
+    
+    export function probeWebSocket({ timeoutMs = 4000 } = {}) {
+      const wsUrl = resolveWebSocketUrl();
+      return new Promise((resolve, reject) => {
+        const startedAt = Date.now();
+        const socket = new WebSocket(wsUrl);
+        const timeout = window.setTimeout(() => {
+          socket.close();
+          reject(new Error("websocket timeout"));
+        }, timeoutMs);
+    
+        socket.onopen = () => socket.send("tpl:ping");
+        socket.onmessage = () => {
+          window.clearTimeout(timeout);
+          socket.close();
+          resolve({ latencyMs: Date.now() - startedAt, wsUrl });
+        };
+        socket.onerror = () => {
+          window.clearTimeout(timeout);
+          reject(new Error("websocket probe failed"));
+        };
+      });
+    }
+  shared-runtime-config.js: |
+    const DEFAULT_API_BASE_URL = "https://__HOST_API__";
+    const DEFAULT_KEYCLOAK_BASE_URL = "https://__HOST_SSO__";
+    const DEFAULT_KEYCLOAK_REALM = "__KEYCLOAK_REALM__";
+    
+    function readGlobal(name) {
+      if (typeof window === "undefined") {
+        return "";
+      }
+      const value = window[name];
+      return typeof value === "string" ? value.trim() : "";
+    }
+    
+    export function resolveApiBaseUrl() {
+      const explicit = readGlobal("TEMPLATE_API_BASE_URL");
+      if (explicit) {
+        return explicit.replace(/\/$/, "");
+      }
+      return DEFAULT_API_BASE_URL;
+    }
+    
+    export function resolveWebSocketUrl() {
+      const explicit = readGlobal("TEMPLATE_WS_URL");
+      if (explicit) {
+        return explicit;
+      }
+      const parsed = new URL(resolveApiBaseUrl());
+      parsed.protocol = parsed.protocol === "https:" ? "wss:" : "ws:";
+      parsed.pathname = "/ws";
+      parsed.search = "";
+      return parsed.toString();
+    }
+    
+    export function resolveKeycloakBaseUrl() {
+      return readGlobal("TEMPLATE_KEYCLOAK_BASE_URL") || DEFAULT_KEYCLOAK_BASE_URL;
+    }
+    
+    export function resolveKeycloakRealm() {
+      return readGlobal("TEMPLATE_KEYCLOAK_REALM") || DEFAULT_KEYCLOAK_REALM;
+    }
+    
+    export function resolveClientId(appKind) {
+      if (appKind === "admin") {
+        return readGlobal("TEMPLATE_ADMIN_CLIENT_ID") || "__ADMIN_CLIENT_ID__";
+      }
+      return readGlobal("TEMPLATE_WEBAPP_CLIENT_ID") || "__WEBAPP_CLIENT_ID__";
+    }
+    
+  shared-auth-client.js: |
+    import { resolveClientId, resolveKeycloakBaseUrl, resolveKeycloakRealm } from "./runtime-config.js";
+    
+    const WELL_KNOWN_CACHE = new Map();
+    const STORAGE_PREFIX = "template.auth";
+    
+    function sessionStorageKey(clientId) {
+      return `${STORAGE_PREFIX}.session.${clientId}`;
+    }
+    
+    function txStorageKey(clientId) {
+      return `${STORAGE_PREFIX}.tx.${clientId}`;
+    }
+    
+    function nowEpochSeconds() {
+      return Math.floor(Date.now() / 1000);
+    }
+    
+    function base64UrlEncode(byteArray) {
+      const binary = String.fromCharCode(...byteArray);
+      return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+    }
+    
+    function base64UrlDecodeToString(input) {
+      const normalized = input.replace(/-/g, "+").replace(/_/g, "/");
+      const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
+      return atob(padded);
+    }
+    
+    function randomString(byteSize = 32) {
+      const bytes = new Uint8Array(byteSize);
+      window.crypto.getRandomValues(bytes);
+      return base64UrlEncode(bytes);
+    }
+    
+    async function sha256Base64Url(value) {
+      const encoder = new TextEncoder();
+      const buffer = encoder.encode(value);
+      const digest = await window.crypto.subtle.digest("SHA-256", buffer);
+      return base64UrlEncode(new Uint8Array(digest));
+    }
+    
+    async function fetchWellKnown() {
+      const baseUrl = resolveKeycloakBaseUrl();
+      const realm = resolveKeycloakRealm();
+      const cacheKey = `${baseUrl}|${realm}`;
+    
+      if (WELL_KNOWN_CACHE.has(cacheKey)) {
+        return WELL_KNOWN_CACHE.get(cacheKey);
+      }
+    
+      const response = await fetch(`${baseUrl}/realms/${realm}/.well-known/openid-configuration`, {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+        },
+      });
+    
+      if (!response.ok) {
+        throw new Error(`oidc discovery failed (${response.status})`);
+      }
+    
+      const payload = await response.json();
+      WELL_KNOWN_CACHE.set(cacheKey, payload);
+      return payload;
+    }
+    
+    export function decodeJwtPayload(token) {
+      if (!token || typeof token !== "string") {
+        return null;
+      }
+      const pieces = token.split(".");
+      if (pieces.length < 2) {
+        return null;
+      }
+    
+      try {
+        const payload = base64UrlDecodeToString(pieces[1]);
+        return JSON.parse(payload);
+      } catch {
+        return null;
+      }
+    }
+    
+    export function getActiveSession({ appKind }) {
+      const clientId = resolveClientId(appKind);
+      const raw = window.sessionStorage.getItem(sessionStorageKey(clientId));
+      if (!raw) {
+        return null;
+      }
+    
+      try {
+        const parsed = JSON.parse(raw);
+        if (!parsed || !parsed.access_token || !parsed.expires_at) {
+          return null;
+        }
+    
+        if (parsed.expires_at <= nowEpochSeconds() + 15) {
+          window.sessionStorage.removeItem(sessionStorageKey(clientId));
+          return null;
+        }
+    
+        return parsed;
+      } catch {
+        window.sessionStorage.removeItem(sessionStorageKey(clientId));
+        return null;
+      }
+    }
+    
+    export function getAuthenticatedUser({ appKind }) {
+      const session = getActiveSession({ appKind });
+      if (!session) {
+        return null;
+      }
+    
+      const claims = decodeJwtPayload(session.id_token) || decodeJwtPayload(session.access_token) || {};
+      const realmRoles = claims?.realm_access?.roles || [];
+    
+      return {
+        username: claims.preferred_username || claims.email || "usuario",
+        name: claims.name || claims.given_name || "",
+        email: claims.email || "",
+        roles: Array.isArray(realmRoles) ? realmRoles : [],
+        accessToken: session.access_token,
+        expiresAt: session.expires_at,
+      };
+    }
+    
+    export async function startLoginFlow({ appKind }) {
+      const clientId = resolveClientId(appKind);
+      const redirectUri = `${window.location.origin}${window.location.pathname}`;
+    
+      const verifier = randomString(64);
+      const challenge = await sha256Base64Url(verifier);
+      const state = randomString(24);
+      const nonce = randomString(24);
+    
+      window.sessionStorage.setItem(
+        txStorageKey(clientId),
+        JSON.stringify({
+          verifier,
+          state,
+          nonce,
+          redirectUri,
+          appKind,
+          created_at: nowEpochSeconds(),
+        }),
+      );
+    
+      const discovery = await fetchWellKnown();
+      const url = new URL(discovery.authorization_endpoint);
+      url.searchParams.set("client_id", clientId);
+      url.searchParams.set("redirect_uri", redirectUri);
+      url.searchParams.set("response_type", "code");
+      url.searchParams.set("scope", "openid profile email");
+      url.searchParams.set("state", state);
+      url.searchParams.set("nonce", nonce);
+      url.searchParams.set("code_challenge", challenge);
+      url.searchParams.set("code_challenge_method", "S256");
+    
+      window.location.assign(url.toString());
+    }
+    
+    export async function handleLoginCallback({ appKind }) {
+      const clientId = resolveClientId(appKind);
+      const current = new URL(window.location.href);
+      const code = current.searchParams.get("code");
+      const state = current.searchParams.get("state");
+      const error = current.searchParams.get("error");
+    
+      if (error) {
+        throw new Error(`oidc callback error: ${error}`);
+      }
+    
+      if (!code || !state) {
+        return false;
+      }
+    
+      const txRaw = window.sessionStorage.getItem(txStorageKey(clientId));
+      if (!txRaw) {
+        throw new Error("oidc transaction not found");
+      }
+    
+      let tx;
+      try {
+        tx = JSON.parse(txRaw);
+      } catch {
+        throw new Error("oidc transaction invalid");
+      }
+    
+      if (!tx || tx.state !== state || !tx.verifier || !tx.redirectUri) {
+        throw new Error("oidc state mismatch");
+      }
+    
+      const discovery = await fetchWellKnown();
+      const tokenResponse = await fetch(discovery.token_endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          Accept: "application/json",
+        },
+        body: new URLSearchParams({
+          grant_type: "authorization_code",
+          client_id: clientId,
+          code,
+          redirect_uri: tx.redirectUri,
+          code_verifier: tx.verifier,
+        }).toString(),
+      });
+    
+      if (!tokenResponse.ok) {
+        const body = await tokenResponse.text();
+        throw new Error(`token exchange failed (${tokenResponse.status}): ${body}`);
+      }
+    
+      const tokenPayload = await tokenResponse.json();
+      const expiresIn = Number(tokenPayload.expires_in || 0);
+    
+      const session = {
+        access_token: tokenPayload.access_token,
+        id_token: tokenPayload.id_token,
+        refresh_token: tokenPayload.refresh_token,
+        token_type: tokenPayload.token_type,
+        scope: tokenPayload.scope,
+        issued_at: nowEpochSeconds(),
+        expires_at: nowEpochSeconds() + Math.max(expiresIn, 60),
+      };
+    
+      window.sessionStorage.setItem(sessionStorageKey(clientId), JSON.stringify(session));
+      window.sessionStorage.removeItem(txStorageKey(clientId));
+    
+      window.history.replaceState({}, document.title, tx.redirectUri);
+      return true;
+    }
+    
+    export async function logoutFromKeycloak({ appKind }) {
+      const clientId = resolveClientId(appKind);
+      const session = getActiveSession({ appKind });
+      const redirectUri = `${window.location.origin}${window.location.pathname}`;
+    
+      window.sessionStorage.removeItem(sessionStorageKey(clientId));
+      window.sessionStorage.removeItem(txStorageKey(clientId));
+    
+      if (!session?.id_token) {
+        window.location.assign(redirectUri);
+        return;
+      }
+    
+      try {
+        const discovery = await fetchWellKnown();
+        const endpoint = discovery.end_session_endpoint;
+        if (!endpoint) {
+          window.location.assign(redirectUri);
+          return;
+        }
+    
+        const logoutUrl = new URL(endpoint);
+        logoutUrl.searchParams.set("id_token_hint", session.id_token);
+        logoutUrl.searchParams.set("post_logout_redirect_uri", redirectUri);
+        logoutUrl.searchParams.set("client_id", clientId);
+        window.location.assign(logoutUrl.toString());
+      } catch {
+        window.location.assign(redirectUri);
+      }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: admin-placeholder
+  namespace: __K8S_NAMESPACE__
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: admin-placeholder
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: admin-placeholder
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.27.5-alpine
+          ports:
+            - name: http
+              containerPort: 80
+          volumeMounts:
+            - name: static-site
+              mountPath: /usr/share/nginx/html
+              readOnly: true
+      volumes:
+        - name: static-site
+          configMap:
+            name: admin-static
+            items:
+              - key: index.html
+                path: index.html
+              - key: main.js
+                path: main.js
+              - key: design-system-components.js
+                path: design-system/components.js
+              - key: design-system-tokens.css
+                path: design-system/tokens.css
+              - key: shared-platform-client.js
+                path: shared/platform-client.js
+              - key: shared-runtime-config.js
+                path: shared/runtime-config.js
+              - key: shared-auth-client.js
+                path: shared/auth-client.js
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: admin-placeholder
+  namespace: __K8S_NAMESPACE__
+spec:
+  selector:
+    app.kubernetes.io/name: admin-placeholder
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: webapp-entrypoint
+  namespace: __K8S_NAMESPACE__
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "false"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - __HOST_APP__
+      secretName: __HOST_APP__-tls
+  rules:
+    - host: __HOST_APP__
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: webapp-placeholder
+                port:
+                  number: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: admin-entrypoint
+  namespace: __K8S_NAMESPACE__
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "false"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - __HOST_ADMIN__
+      secretName: __HOST_ADMIN__-tls
+  rules:
+    - host: __HOST_ADMIN__
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: admin-placeholder
+                port:
+                  number: 80

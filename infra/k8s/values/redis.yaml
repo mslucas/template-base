@@ -1,0 +1,10 @@
+architecture: standalone
+auth:
+  enabled: true
+  existingSecret: redis-auth
+  existingSecretPasswordKey: redis-password
+master:
+  persistence:
+    enabled: true
+    size: 8Gi
+

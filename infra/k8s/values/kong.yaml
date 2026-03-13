@@ -1,0 +1,27 @@
+ingressController:
+  enabled: true
+  ingressClass: kong
+
+env:
+  database: "off"
+  router_flavor: traditional
+  admin_api_uri: "https://__HOST_KONG_ADMIN__"
+  admin_gui_url: "https://__HOST_KONG_MANAGER__"
+  admin_gui_api_url: "https://__HOST_KONG_ADMIN__"
+
+proxy:
+  enabled: true
+  type: ClusterIP
+
+admin:
+  enabled: true
+  type: ClusterIP
+  http:
+    enabled: true
+
+manager:
+  enabled: true
+  type: ClusterIP
+  http:
+    enabled: true
+

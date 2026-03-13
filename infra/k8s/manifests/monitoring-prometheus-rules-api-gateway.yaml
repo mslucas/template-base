@@ -1,0 +1,69 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: api-gateway-slo
+  namespace: __K8S_NAMESPACE__
+  labels:
+    app.kubernetes.io/name: api-gateway
+    app.kubernetes.io/part-of: __PROJECT_SLUG__
+spec:
+  groups:
+    - name: api-gateway.slo
+      rules:
+        - alert: ApiGatewayAvailabilityLow
+          expr: |
+            (
+              1 - (
+                sum(rate(platform_http_server_requests_total{service="api-gateway",status=~"5.."}[5m]))
+                /
+                clamp_min(sum(rate(platform_http_server_requests_total{service="api-gateway"}[5m])), 1)
+              )
+            ) < 0.99
+          for: 10m
+          labels:
+            severity: critical
+            slo: availability
+          annotations:
+            summary: "Disponibilidade do api-gateway abaixo de 99% (5m)"
+            description: "A taxa de erros 5xx excedeu o limite de erro para o SLO de disponibilidade."
+        - alert: ApiGatewayLatencyP95High
+          expr: |
+            histogram_quantile(
+              0.95,
+              sum(rate(platform_http_server_request_duration_seconds_bucket{service="api-gateway"}[5m])) by (le)
+            ) > 0.7
+          for: 10m
+          labels:
+            severity: warning
+            slo: latency
+          annotations:
+            summary: "Latencia p95 do api-gateway acima de 700ms"
+            description: "A latencia p95 ficou acima do limite definido para o SLO de latencia."
+        - alert: ApiGatewayErrorBudgetBurnFast
+          expr: |
+            (
+              sum(rate(platform_http_server_requests_total{service="api-gateway",status=~"5.."}[5m]))
+              /
+              clamp_min(sum(rate(platform_http_server_requests_total{service="api-gateway"}[5m])), 1)
+            ) > 0.02
+          for: 5m
+          labels:
+            severity: critical
+            slo: error_budget
+          annotations:
+            summary: "Consumo rapido de error budget no api-gateway"
+            description: "A taxa de erro atual indica risco de esgotar rapidamente o error budget."
+        - alert: ApiGatewayErrorBudgetBurnSlow
+          expr: |
+            (
+              sum(rate(platform_http_server_requests_total{service="api-gateway",status=~"5.."}[1h]))
+              /
+              clamp_min(sum(rate(platform_http_server_requests_total{service="api-gateway"}[1h])), 1)
+            ) > 0.005
+          for: 30m
+          labels:
+            severity: warning
+            slo: error_budget
+          annotations:
+            summary: "Consumo gradual de error budget no api-gateway"
+            description: "A taxa de erro acumulada em 1h esta acima do esperado para o SLO configurado."

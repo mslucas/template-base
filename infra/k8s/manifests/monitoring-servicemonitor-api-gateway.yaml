@@ -1,0 +1,20 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: api-gateway
+  namespace: __K8S_NAMESPACE__
+  labels:
+    app.kubernetes.io/name: api-gateway
+    app.kubernetes.io/part-of: __PROJECT_SLUG__
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: api-gateway
+  namespaceSelector:
+    matchNames:
+      - __K8S_NAMESPACE__
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s
