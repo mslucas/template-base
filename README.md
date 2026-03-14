@@ -29,13 +29,14 @@ Starter kit tecnico para hot start de novos projetos, sem acoplamento de regra d
   - `06-gerador-servicos.md`: onboarding de microservicos com `new-service.sh`
   - `07-release-notes-template-v1.1.md`: escopo da versao atual
   - `08-direcao-arte-material.md`: diretriz visual Material Design 3
+  - `09-iot-firmware-custom.md`: baseline de IoT devices e firmware customizado
 - `scripts/`
   - `check-prereqs.sh`
   - `init-template.sh`
   - `new-service.sh`
 - `infra/k8s/`: bootstrap da plataforma, manifests e GitOps
 - `.github/workflows/`: CI/CD para build/push e update GitOps
-- `src/`: skeleton tecnico inicial (frontend + backend)
+- `src/`: skeleton tecnico inicial (frontend + backend + iot + firmware)
 - `template.env.example`: variaveis de parametrizacao
 
 ## Fluxo recomendado (novo repositorio)
@@ -74,6 +75,7 @@ kubectl get deploy otel-collector -n __K8S_NAMESPACE__
   - Dashboard externo: `https://__HOST_MQTT__`
   - Listener MQTT interno: `emqx-listeners.__K8S_NAMESPACE__.svc.cluster.local:1883`
 - LiteLLM pronto como AI Gateway com exposicao dedicada via Kong.
+- Contratos base para integracao com devices IoT e ciclo OTA de firmware customizado.
 - Overlays GitOps `dev/hml/prd` para o `api-gateway`.
 - Pack opcional de monitoramento: `ServiceMonitor`, `PrometheusRule` e dashboard Grafana.
 - Baseline de seguranca: `securityContext` restritivo, `PodDisruptionBudget`, `NetworkPolicy` e RBAC minimo.

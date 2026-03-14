@@ -1,0 +1,13 @@
+{
+  "schema_version": "v1",
+  "tenant": "acme",
+  "device_id": "dev-000123",
+  "command_name": "set_sampling_interval",
+  "command_id": "cmd-20260313-0001",
+  "correlation_id": "2e80cb93-eec8-4cf4-aac4-f805f7f0193a",
+  "ts_utc": "2026-03-13T19:45:02Z",
+  "result": "ack",
+  "details": {
+    "applied": true
+  }
+}

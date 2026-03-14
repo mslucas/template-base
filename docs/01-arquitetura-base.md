@@ -30,6 +30,7 @@ Definir baseline tecnica para iniciar projetos novos com padrao escalavel, obser
 ## Backend padrao
 - API Gateway em Go.
 - Camada EDA obrigatoria com contratos de producer/consumer por dominio.
+- Integracao IoT via MQTT com EMQX como broker dedicado.
 - Endpoints tecnicos padrao:
   - `/healthz`
   - `/readyz`
@@ -44,6 +45,8 @@ Definir baseline tecnica para iniciar projetos novos com padrao escalavel, obser
 ## Principios tecnicos obrigatorios
 - Arquitetura de aplicacao: 100% baseada em microservicos por dominio.
 - Escritas de negocio (`INSERT`/`UPDATE`): assíncronas via RabbitMQ (producer-consumer).
+- IoT: topicos MQTT padronizados por tenant/device e payload versionado por schema.
+- Firmware: release com checksum SHA-256 e assinatura obrigatoria em producao.
 - Leituras de alta repeticao: cache-first em Redis.
 - Persistencia de timestamps: UTC.
 - Exibicao de datas: timezone configuravel por usuario/tenant.

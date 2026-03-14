@@ -49,6 +49,7 @@ ENABLE_MONITORING_PACK="true" \
 kubectl get pods -n __K8S_NAMESPACE__
 kubectl get deploy otel-collector -n __K8S_NAMESPACE__
 kubectl get emqx -n __K8S_NAMESPACE__
+kubectl get svc emqx-listeners emqx-dashboard -n __K8S_NAMESPACE__
 kubectl get networkpolicy -n __K8S_NAMESPACE__
 curl -fsSL https://__HOST_API__/healthz
 curl -fsSL https://__HOST_API__/api/v1/platform/meta
@@ -59,6 +60,12 @@ curl -fsSL -X POST https://__HOST_API__/api/v1/template/events \
   -H 'Content-Type: application/json' \
   -d '{"event_type":"platform.smoke","payload":{"ok":true}}'
 curl -fsSL https://__HOST_SSO__/realms/__KEYCLOAK_REALM__/.well-known/openid-configuration
+```
+
+Confirmar artefatos base de IoT/Firmware no repositorio:
+```bash
+ls src/iot/contracts
+ls src/firmware/manifests
 ```
 
 Validar visualmente se login/account do Keycloak carregam o tema Material customizado.

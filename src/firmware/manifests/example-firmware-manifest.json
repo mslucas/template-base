@@ -1,0 +1,29 @@
+{
+  "manifest_version": "v1",
+  "device_model": "sensor-x1",
+  "firmware_version": "1.2.3",
+  "release_channel": "stable",
+  "minimum_bootloader_version": "1.0.0",
+  "artifact": {
+    "url": "https://firmware.example.com/sensor-x1/1.2.3/firmware.bin",
+    "sha256": "8f1f2a6ba7f63218f18d43c8f58c6d3f4d9da8a0cdb89ef2ce0e2d8dd2d9c5f7",
+    "size_bytes": 1572864
+  },
+  "signature": {
+    "algorithm": "ed25519",
+    "key_id": "firmware-signing-key-2026-01",
+    "value": "BASE64_SIGNATURE_PLACEHOLDER"
+  },
+  "rollout": {
+    "strategy": "progressive",
+    "waves": [
+      { "name": "canary", "percentage": 5, "wait_minutes": 30 },
+      { "name": "batch-1", "percentage": 25, "wait_minutes": 60 },
+      { "name": "batch-2", "percentage": 70, "wait_minutes": 120 }
+    ],
+    "abort_threshold": {
+      "failure_rate_percent": 5,
+      "timeout_rate_percent": 3
+    }
+  }
+}

@@ -17,6 +17,7 @@ Use este arquivo para validar os detalhes antes de iniciar o novo projeto.
 - [ ] Manter RabbitMQ para toda escrita assíncrona de negocio.
 - [ ] Manter padrao producer-consumer no backend.
 - [ ] Manter contratos EDA explicitos (producer/consumer) por dominio.
+- [ ] Manter convencao de topicos MQTT por tenant/device para integracao IoT.
 
 ## 3) Identidade e seguranca
 - [ ] Manter Keycloak como SSO central.
@@ -54,6 +55,12 @@ Use este arquivo para validar os detalhes antes de iniciar o novo projeto.
 - [ ] Confirmar padrao de nomes e domínios do novo projeto.
 - [ ] Confirmar timezone default.
 - [ ] Confirmar naming do realm/clientes OIDC.
+
+## 8) IoT e firmware
+- [ ] Definir estrategia de identidade do device (certificado/chave por device).
+- [ ] Definir contrato de telemetria, comando e ack com versionamento de schema.
+- [ ] Definir pipeline OTA com assinatura de firmware e politica de rollback.
+- [ ] Definir estrategia de rollout progressivo (canary -> ondas -> total).
 
 ## Observacoes
 Registre aqui quaisquer ajustes necessarios para derivar variacao do template.

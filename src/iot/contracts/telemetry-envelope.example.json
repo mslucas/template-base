@@ -1,0 +1,17 @@
+{
+  "schema_version": "v1",
+  "tenant": "acme",
+  "device_id": "dev-000123",
+  "firmware_version": "1.2.3",
+  "ts_utc": "2026-03-13T19:41:00Z",
+  "correlation_id": "7d26fe53-1410-49b0-97c9-b85ef4f2b6cb",
+  "metrics": {
+    "temperature_c": 24.7,
+    "humidity_pct": 48.2,
+    "battery_mv": 3890
+  },
+  "status": {
+    "signal_rssi": -71,
+    "uptime_s": 41233
+  }
+}

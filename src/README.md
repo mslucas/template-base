@@ -6,3 +6,5 @@ Estrutura tecnica base:
 - `frontend/design-system`: tokens e componentes compartilhados.
 - `frontend/shared`: runtime config, cliente HTTP/WS e OIDC.
 - `services/api-gateway`: servico inicial em Go para contratos tecnicos.
+- `iot`: contratos e convencoes para payload/topic de devices.
+- `firmware`: baseline de manifesto OTA e politica de assinatura.

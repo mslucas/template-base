@@ -15,6 +15,7 @@
 5. Confirmar `otel-collector` ativo no namespace do projeto.
 6. Confirmar `NetworkPolicy` aplicada no namespace do projeto.
 7. Confirmar CR `emqx.apps.emqx.io/emqx` em `Running`.
+8. Confirmar services `emqx-listeners` e `emqx-dashboard` criados.
 
 ## Publicacao
 1. Confirmar hosts `app/admin/api/ai/mqtt/sso` com TLS valido.
@@ -26,6 +27,7 @@
 7. Confirmar publicacao em `/api/v1/template/events` e consumo no log `eda_event_consumed`.
 8. Confirmar LiteLLM respondendo `GET /health/liveliness`.
 9. Confirmar EMQX Dashboard respondendo `GET /status`.
+10. Validar conectividade MQTT com `emqx-listeners:1883` (smoke publish/sub).
 
 ## GitOps
 1. Confirmar `argocd Application` sincronizada.
@@ -37,3 +39,7 @@
 2. Confirmar `PrometheusRule` criado (quando CRD estiver instalada).
 3. Confirmar dashboard `API Gateway SLO` importada no Grafana via ConfigMap.
 4. Confirmar coleta de metrica do EMQX (se monitoramento de MQTT estiver habilitado no ambiente).
+
+## Firmware
+1. Confirmar manifesto OTA versionado em `src/firmware/manifests/`.
+2. Confirmar politica de assinatura revisada em `src/firmware/signing-policy.md`.
