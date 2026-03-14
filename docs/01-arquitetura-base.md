@@ -12,6 +12,8 @@ Definir baseline tecnica para iniciar projetos novos com padrao escalavel, obser
 - Banco relacional: PostgreSQL compartilhado, modelo database-per-service.
 - Cache: Redis.
 - Mensageria: RabbitMQ.
+- Broker MQTT: EMQX (gerenciado por EMQX Operator).
+- AI Gateway: LiteLLM (open source).
 - Observabilidade: OpenTelemetry SDK no backend + OpenTelemetry Collector (OTLP).
 - Deploy GitOps: ArgoCD.
 - Gestao de ambientes: overlays `dev/hml/prd` com Kustomize.
@@ -27,6 +29,7 @@ Definir baseline tecnica para iniciar projetos novos com padrao escalavel, obser
 
 ## Backend padrao
 - API Gateway em Go.
+- Camada EDA obrigatoria com contratos de producer/consumer por dominio.
 - Endpoints tecnicos padrao:
   - `/healthz`
   - `/readyz`
@@ -57,6 +60,8 @@ Definir baseline tecnica para iniciar projetos novos com padrao escalavel, obser
 - `__HOST_ADMIN__`
 - `__HOST_API__`
 - `__HOST_WEBHOOK__`
+- `__HOST_MQTT__`
+- `__HOST_AI__`
 - `__HOST_SSO__`
 - `__HOST_MQ__`
 - `__HOST_KONG_ADMIN__`

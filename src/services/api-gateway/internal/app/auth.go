@@ -27,12 +27,13 @@ const authClaimsContextKey contextKey = "auth.claims"
 
 // AuthorizerConfig configures JWT validation and role enforcement.
 type AuthorizerConfig struct {
-	Enabled           bool
-	Issuer            string
-	JWKSURL           string
-	AllowedAudiences  []string
-	TemplateReadRoles []string
-	Logger            *log.Logger
+	Enabled            bool
+	Issuer             string
+	JWKSURL            string
+	AllowedAudiences   []string
+	TemplateReadRoles  []string
+	TemplateEventRoles []string
+	Logger             *log.Logger
 }
 
 // Authorizer applies JWT + RBAC rules for protected endpoints.
@@ -42,7 +43,8 @@ type Authorizer struct {
 
 	validator *JWTValidator
 
-	templateReadRoles map[string]struct{}
+	templateReadRoles  map[string]struct{}
+	templateEventRoles map[string]struct{}
 }
 
 // AccessClaims models Keycloak access token fields used by API auth.
@@ -77,9 +79,13 @@ func NewAuthorizer(cfg AuthorizerConfig) (*Authorizer, error) {
 	}
 
 	a := &Authorizer{
-		enabled:           cfg.Enabled,
-		logger:            logger,
-		templateReadRoles: toSet(cfg.TemplateReadRoles),
+		enabled:            cfg.Enabled,
+		logger:             logger,
+		templateReadRoles:  toSet(cfg.TemplateReadRoles),
+		templateEventRoles: toSet(cfg.TemplateEventRoles),
+	}
+	if len(a.templateEventRoles) == 0 {
+		a.templateEventRoles = a.templateReadRoles
 	}
 
 	if !cfg.Enabled {
@@ -163,6 +169,9 @@ func ClaimsFromContext(ctx context.Context) (*AccessClaims, bool) {
 func (a *Authorizer) requiredRoles(method, path string) (map[string]struct{}, bool) {
 	if method == http.MethodGet && path == "/api/v1/template/secure" {
 		return a.templateReadRoles, true
+	}
+	if method == http.MethodPost && path == "/api/v1/template/events" {
+		return a.templateEventRoles, true
 	}
 	return nil, false
 }

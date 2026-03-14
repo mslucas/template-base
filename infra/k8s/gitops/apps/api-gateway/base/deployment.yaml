@@ -44,6 +44,10 @@ spec:
               value: https://__HOST_SSO__/realms/__KEYCLOAK_REALM__/protocol/openid-connect/certs
             - name: AUTH_ALLOWED_AUDIENCES
               value: __WEBAPP_CLIENT_ID__,__ADMIN_CLIENT_ID__
+            - name: AUTH_TEMPLATE_READ_ROLES
+              value: platform_admin,platform_support
+            - name: AUTH_TEMPLATE_EVENT_ROLES
+              value: platform_admin,platform_support
             - name: OTEL_ENABLED
               value: "true"
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
@@ -54,6 +58,24 @@ spec:
               value: "1.0"
             - name: OTEL_ENVIRONMENT
               value: base
+            - name: EDA_ENABLED
+              value: "true"
+            - name: EDA_EXCHANGE
+              value: __EDA_EXCHANGE__
+            - name: EDA_EXCHANGE_TYPE
+              value: __EDA_EXCHANGE_TYPE__
+            - name: EDA_QUEUE
+              value: __EDA_QUEUE__
+            - name: EDA_BINDING_KEY
+              value: __EDA_BINDING_KEY__
+            - name: EDA_ROUTING_KEY_BASE
+              value: __EDA_ROUTING_KEY_BASE__
+            - name: EDA_CONSUMER_ENABLED
+              value: "true"
+            - name: EDA_CONSUMER_TAG
+              value: api-gateway-consumer
+            - name: EDA_CONSUMER_PREFETCH
+              value: "__EDA_CONSUMER_PREFETCH__"
             - name: POSTGRES_HOST
               value: postgresql-shared.__K8S_NAMESPACE__.svc.cluster.local
             - name: POSTGRES_PORT

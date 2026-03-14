@@ -5,7 +5,7 @@ info:
   description: >
     Contrato tecnico inicial do gateway para novos projetos.
     Inclui probes, metadata, websocket de validacao, endpoint protegido com JWT + RBAC
-    e tracing distribuido com OpenTelemetry.
+    e tracing distribuido com OpenTelemetry, com camada EDA pronta para publish de eventos.
 servers:
   - url: https://__HOST_API__
 components:
@@ -63,3 +63,40 @@ paths:
           description: Missing or invalid token
         '403':
           description: Insufficient role
+  /api/v1/template/events:
+    post:
+      summary: Publish event to EDA exchange
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [event_type, payload]
+              properties:
+                event_type:
+                  type: string
+                  example: invoice.created
+                routing_key:
+                  type: string
+                  example: platform.api-gateway.invoice.created
+                payload:
+                  type: object
+                  additionalProperties: true
+                metadata:
+                  type: object
+                  additionalProperties:
+                    type: string
+      responses:
+        '202':
+          description: Event accepted for publishing
+        '400':
+          description: Invalid request payload
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Insufficient role
+        '502':
+          description: Broker unavailable

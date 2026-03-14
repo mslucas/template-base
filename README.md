@@ -13,6 +13,8 @@ Starter kit tecnico para hot start de novos projetos, sem acoplamento de regra d
   - PostgreSQL compartilhado (database-per-service)
   - Redis
   - RabbitMQ
+  - EMQX Operator + EMQX (broker MQTT dedicado)
+  - LiteLLM (AI Gateway open source)
   - OpenTelemetry (SDK + Collector OTLP)
   - ArgoCD (GitOps)
   - Frontend WebApp/Admin em React runtime ESM
@@ -50,6 +52,7 @@ Starter kit tecnico para hot start de novos projetos, sem acoplamento de regra d
 LETSENCRYPT_EMAIL="ops@seudominio.com" \
 ARGOCD_REPO_TOKEN="<token_git>" \
 GHCR_PULL_TOKEN="<token_ghcr>" \
+OPENAI_API_KEY="<token_provider>" \
 ENABLE_MONITORING_PACK="true" \
 ./infra/k8s/scripts/bootstrap.sh
 ```
@@ -58,12 +61,19 @@ ENABLE_MONITORING_PACK="true" \
 curl -fsSL https://__HOST_API__/healthz
 curl -fsSL https://__HOST_API__/api/v1/platform/meta
 curl -fsSL https://__HOST_API__/metrics
+curl -fsSL https://__HOST_AI__/health/liveliness
+curl -fsSL https://__HOST_MQTT__/status
 kubectl get deploy otel-collector -n __K8S_NAMESPACE__
 ```
 
 ## O que sai pronto
 - API gateway Go com `/healthz`, `/readyz`, `/api/v1/platform/meta`, `/swagger/openapi.yaml`, `/ws` e `/metrics`.
 - Instrumentacao OpenTelemetry no backend com correlacao `trace_id`/`span_id`.
+- Camada EDA pronta no backend com contratos de producer/consumer e adapter RabbitMQ.
+- Broker MQTT robusto com EMQX gerenciado por EMQX Operator.
+  - Dashboard externo: `https://__HOST_MQTT__`
+  - Listener MQTT interno: `emqx-listeners.__K8S_NAMESPACE__.svc.cluster.local:1883`
+- LiteLLM pronto como AI Gateway com exposicao dedicada via Kong.
 - Overlays GitOps `dev/hml/prd` para o `api-gateway`.
 - Pack opcional de monitoramento: `ServiceMonitor`, `PrometheusRule` e dashboard Grafana.
 - Baseline de seguranca: `securityContext` restritivo, `PodDisruptionBudget`, `NetworkPolicy` e RBAC minimo.
@@ -71,7 +81,7 @@ kubectl get deploy otel-collector -n __K8S_NAMESPACE__
 - Keycloak SSO com tema Material aplicado nas telas de login/account.
 
 ## Geracao de novos microservicos
-Use o gerador para criar um servico Go com scaffold tecnico + GitOps:
+Use o gerador para criar um servico Go com scaffold tecnico + GitOps + camada EDA (producer/consumer):
 ```bash
 ./scripts/new-service.sh <service-name> --port 8091 --gitops-env dev
 ```

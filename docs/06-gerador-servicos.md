@@ -21,6 +21,8 @@ Padronizar onboarding de novos microservicos com scaffold tecnico consistente (G
 - `src/services/<service-name>/`:
   - `go.mod`
   - `cmd/server/main.go`
+  - `internal/eda/contracts.go`
+  - `internal/eda/noop.go`
   - `Dockerfile`
   - `Makefile`
   - `README.md`
@@ -32,3 +34,4 @@ Padronizar onboarding de novos microservicos com scaffold tecnico consistente (G
 ## Observacoes
 - Execute o `init-template.sh` antes de usar o gerador, para resolver placeholders.
 - Revise as variaveis de imagem e modulo Go antes do primeiro commit.
+- O servico ja nasce com endpoint `POST /api/v1/events/publish` e contratos EDA (producer/consumer) em fallback no-op.

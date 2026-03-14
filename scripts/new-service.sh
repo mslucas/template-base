@@ -114,7 +114,7 @@ fi
 IMAGE_REPO="${IMAGE_REPO_PREFIX}/${SERVICE_NAME}"
 MODULE_PATH="${MODULE_PREFIX}/${SERVICE_NAME}"
 
-mkdir -p "${SERVICE_DIR}/cmd/server"
+mkdir -p "${SERVICE_DIR}/cmd/server" "${SERVICE_DIR}/internal/eda"
 mkdir -p "${APP_DIR}/base" "${APP_DIR}/overlays/dev" "${APP_DIR}/overlays/hml" "${APP_DIR}/overlays/prd"
 
 cat > "${SERVICE_DIR}/go.mod" <<EOF
@@ -123,16 +123,102 @@ module ${MODULE_PATH}
 go 1.24.5
 EOF
 
+cat > "${SERVICE_DIR}/internal/eda/contracts.go" <<EOF
+package eda
+
+import (
+  "context"
+  "encoding/json"
+  "time"
+)
+
+type Event struct {
+  Type       string          \`json:"type"\`
+  RoutingKey string          \`json:"routing_key"\`
+  Payload    json.RawMessage \`json:"payload"\`
+  Timestamp  time.Time       \`json:"timestamp"\`
+}
+
+type Handler func(context.Context, Event) error
+
+type Producer interface {
+  Publish(context.Context, Event) error
+}
+
+type Consumer interface {
+  Start(context.Context, Handler) error
+}
+EOF
+
+cat > "${SERVICE_DIR}/internal/eda/noop.go" <<EOF
+package eda
+
+import "context"
+
+type NoopProducer struct{}
+
+func NewNoopProducer() *NoopProducer {
+  return &NoopProducer{}
+}
+
+func (*NoopProducer) Publish(context.Context, Event) error {
+  return nil
+}
+
+type NoopConsumer struct{}
+
+func NewNoopConsumer() *NoopConsumer {
+  return &NoopConsumer{}
+}
+
+func (*NoopConsumer) Start(ctx context.Context, _ Handler) error {
+  <-ctx.Done()
+  return nil
+}
+EOF
+
 cat > "${SERVICE_DIR}/cmd/server/main.go" <<EOF
 package main
 
 import (
+  "context"
+  "bytes"
   "encoding/json"
+  "errors"
+  "fmt"
+  "io"
   "log"
   "net/http"
+  "os"
+  "os/signal"
+  "strings"
+  "syscall"
+  "time"
+
+  "${MODULE_PATH}/internal/eda"
 )
 
+type publishRequest struct {
+  EventType  string          \`json:"event_type"\`
+  RoutingKey string          \`json:"routing_key,omitempty"\`
+  Payload    json.RawMessage \`json:"payload"\`
+}
+
 func main() {
+  logger := log.New(os.Stdout, "", log.LstdFlags|log.LUTC)
+  producer := eda.NewNoopProducer()
+  consumer := eda.NewNoopConsumer()
+
+  lifecycleCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+  defer stop()
+
+  go func() {
+    _ = consumer.Start(lifecycleCtx, func(_ context.Context, event eda.Event) error {
+      logger.Printf("eda_event_consumed type=%s routing_key=%s", event.Type, event.RoutingKey)
+      return nil
+    })
+  }()
+
   mux := http.NewServeMux()
   mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
     w.Header().Set("Content-Type", "application/json")
@@ -143,10 +229,85 @@ func main() {
     _ = json.NewEncoder(w).Encode(map[string]string{"status": "ready", "service": "${SERVICE_NAME}"})
   })
 
-  log.Printf("${SERVICE_NAME} listening on :${PORT}")
-  if err := http.ListenAndServe(":${PORT}", mux); err != nil {
-    log.Fatalf("server failed: %v", err)
+  mux.HandleFunc("/api/v1/events/publish", func(w http.ResponseWriter, r *http.Request) {
+    if r.Method != http.MethodPost {
+      http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+      return
+    }
+
+    body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1<<20))
+    if err != nil {
+      http.Error(w, "invalid request body", http.StatusBadRequest)
+      return
+    }
+
+    var req publishRequest
+    if err := json.Unmarshal(body, &req); err != nil {
+      http.Error(w, "invalid request body", http.StatusBadRequest)
+      return
+    }
+    if strings.TrimSpace(req.EventType) == "" {
+      http.Error(w, "event_type is required", http.StatusBadRequest)
+      return
+    }
+    if len(bytes.TrimSpace(req.Payload)) == 0 {
+      req.Payload = json.RawMessage(\`{}\`)
+    }
+
+    routingKey := strings.TrimSpace(req.RoutingKey)
+    if routingKey == "" {
+      routingKey = fmt.Sprintf("platform.${SERVICE_NAME}.%s", normalizeRoutingToken(req.EventType))
+    }
+
+    err = producer.Publish(r.Context(), eda.Event{
+      Type:       strings.TrimSpace(req.EventType),
+      RoutingKey: routingKey,
+      Payload:    req.Payload,
+      Timestamp:  time.Now().UTC(),
+    })
+    if err != nil {
+      http.Error(w, "failed to publish event", http.StatusBadGateway)
+      return
+    }
+
+    w.Header().Set("Content-Type", "application/json")
+    w.WriteHeader(http.StatusAccepted)
+    _ = json.NewEncoder(w).Encode(map[string]string{
+      "status": "accepted",
+      "routing_key": routingKey,
+    })
+  })
+
+  server := &http.Server{
+    Addr:              ":${PORT}",
+    Handler:           mux,
+    ReadHeaderTimeout: 10 * time.Second,
   }
+
+  go func() {
+    <-lifecycleCtx.Done()
+    shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+    defer cancel()
+    _ = server.Shutdown(shutdownCtx)
+  }()
+
+  logger.Printf("${SERVICE_NAME} listening on :${PORT}")
+  if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+    logger.Fatalf("server failed: %v", err)
+  }
+}
+
+func normalizeRoutingToken(value string) string {
+  token := strings.ToLower(strings.TrimSpace(value))
+  token = strings.ReplaceAll(token, " ", ".")
+  token = strings.ReplaceAll(token, "/", ".")
+  token = strings.ReplaceAll(token, ":", ".")
+  token = strings.ReplaceAll(token, "-", ".")
+  token = strings.Trim(token, ".")
+  if token == "" {
+    return "event"
+  }
+  return token
 }
 EOF
 
@@ -186,7 +347,7 @@ rm -f "${SERVICE_DIR}/Makefile.bak"
 cat > "${SERVICE_DIR}/README.md" <<EOF
 # ${SERVICE_NAME}
 
-Servico base gerado automaticamente pelo template.
+Servico base gerado automaticamente pelo template, com camada EDA pronta para producer/consumer.
 
 ## Executar local
 \`\`\`bash
@@ -200,6 +361,11 @@ cd src/services/${SERVICE_NAME}
 make test
 make build
 \`\`\`
+
+## Endpoints tecnicos
+- \`GET /healthz\`
+- \`GET /readyz\`
+- \`POST /api/v1/events/publish\`
 EOF
 
 cat > "${APP_DIR}/base/deployment.yaml" <<EOF
@@ -232,6 +398,13 @@ spec:
           ports:
             - name: http
               containerPort: ${PORT}
+          env:
+            - name: EDA_ENABLED
+              value: "true"
+            - name: EDA_EXCHANGE
+              value: __PROJECT_SLUG__.events
+            - name: EDA_ROUTING_KEY_BASE
+              value: platform.${SERVICE_NAME}
           readinessProbe:
             httpGet:
               path: /readyz

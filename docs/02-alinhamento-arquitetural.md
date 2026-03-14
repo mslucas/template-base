@@ -7,6 +7,8 @@ Use este arquivo para validar os detalhes antes de iniciar o novo projeto.
 - [ ] Manter ArgoCD como mecanismo oficial de deploy GitOps.
 - [ ] Manter GHCR como registry principal.
 - [ ] Manter NGINX + Kong no edge de publicacao.
+- [ ] Manter LiteLLM como AI Gateway open source publicado via Kong.
+- [ ] Manter EMQX Operator como camada oficial para broker MQTT.
 - [ ] Manter overlays Kustomize para `dev/hml/prd`.
 
 ## 2) Dados e integracao
@@ -14,6 +16,7 @@ Use este arquivo para validar os detalhes antes de iniciar o novo projeto.
 - [ ] Manter Redis para cache de leitura repetida.
 - [ ] Manter RabbitMQ para toda escrita assíncrona de negocio.
 - [ ] Manter padrao producer-consumer no backend.
+- [ ] Manter contratos EDA explicitos (producer/consumer) por dominio.
 
 ## 3) Identidade e seguranca
 - [ ] Manter Keycloak como SSO central.

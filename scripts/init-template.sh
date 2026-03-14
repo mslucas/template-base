@@ -25,6 +25,8 @@ required_vars=(
   HOST_APP
   HOST_ADMIN
   HOST_API
+  HOST_AI
+  HOST_MQTT
   HOST_WEBHOOK
   HOST_SSO
   HOST_MQ
@@ -42,6 +44,12 @@ required_vars=(
   DEFAULT_TIMEZONE
   OTEL_BACKEND_OTLP_ENDPOINT
   OTEL_BACKEND_OTLP_INSECURE
+  EDA_EXCHANGE
+  EDA_EXCHANGE_TYPE
+  EDA_QUEUE
+  EDA_BINDING_KEY
+  EDA_ROUTING_KEY_BASE
+  EDA_CONSUMER_PREFETCH
 )
 
 for var_name in "${required_vars[@]}"; do
@@ -68,6 +76,8 @@ replace "ARGOCD_NAMESPACE" "${ARGOCD_NAMESPACE:-argocd}"
 replace "HOST_APP" "${HOST_APP}"
 replace "HOST_ADMIN" "${HOST_ADMIN}"
 replace "HOST_API" "${HOST_API}"
+replace "HOST_AI" "${HOST_AI}"
+replace "HOST_MQTT" "${HOST_MQTT}"
 replace "HOST_WEBHOOK" "${HOST_WEBHOOK}"
 replace "HOST_SSO" "${HOST_SSO}"
 replace "HOST_MQ" "${HOST_MQ}"
@@ -86,6 +96,12 @@ replace "ADMIN_CLIENT_ID" "${ADMIN_CLIENT_ID}"
 replace "DEFAULT_TIMEZONE" "${DEFAULT_TIMEZONE}"
 replace "OTEL_BACKEND_OTLP_ENDPOINT" "${OTEL_BACKEND_OTLP_ENDPOINT}"
 replace "OTEL_BACKEND_OTLP_INSECURE" "${OTEL_BACKEND_OTLP_INSECURE}"
+replace "EDA_EXCHANGE" "${EDA_EXCHANGE}"
+replace "EDA_EXCHANGE_TYPE" "${EDA_EXCHANGE_TYPE}"
+replace "EDA_QUEUE" "${EDA_QUEUE}"
+replace "EDA_BINDING_KEY" "${EDA_BINDING_KEY}"
+replace "EDA_ROUTING_KEY_BASE" "${EDA_ROUTING_KEY_BASE}"
+replace "EDA_CONSUMER_PREFETCH" "${EDA_CONSUMER_PREFETCH}"
 
 while IFS= read -r file_path; do
   sed -i.bak -f "${sed_script}" "${file_path}"

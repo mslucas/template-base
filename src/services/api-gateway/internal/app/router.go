@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bytes"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -8,10 +9,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/example/template-api-gateway/internal/eda"
 	"github.com/example/template-api-gateway/internal/observability"
 	"github.com/example/template-api-gateway/internal/openapi"
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const (
@@ -32,6 +36,7 @@ type statusResponse struct {
 	Runtime         string    `json:"runtime"`
 	DefaultTimezone string    `json:"default_timezone"`
 	AuthEnabled     bool      `json:"auth_enabled"`
+	EDAEnabled      bool      `json:"eda_enabled"`
 }
 
 type wsEnvelope struct {
@@ -46,23 +51,43 @@ type secureResponse struct {
 	Roles     []string `json:"roles"`
 }
 
+type publishEventRequest struct {
+	EventType  string            `json:"event_type"`
+	RoutingKey string            `json:"routing_key,omitempty"`
+	Payload    json.RawMessage   `json:"payload"`
+	Metadata   map[string]string `json:"metadata,omitempty"`
+}
+
+type publishEventResponse struct {
+	Status     string `json:"status"`
+	EventID    string `json:"event_id"`
+	RoutingKey string `json:"routing_key"`
+}
+
 // RouterOptions controls middleware behavior for HTTP routes.
 type RouterOptions struct {
-	Authorizer         *Authorizer
-	ServiceName        string
-	Version            string
-	DefaultTimezone    string
-	AuthEnabled        bool
-	AllowedOrigins     []string
-	TracingEnabled     bool
-	TracingServiceName string
-	Logger             *log.Logger
+	Authorizer          *Authorizer
+	ServiceName         string
+	Version             string
+	DefaultTimezone     string
+	AuthEnabled         bool
+	AllowedOrigins      []string
+	TracingEnabled      bool
+	TracingServiceName  string
+	EDAEnabled          bool
+	EventProducer       eda.Producer
+	EventRoutingKeyBase string
+	Logger              *log.Logger
 }
 
 // NewRouter defines the base HTTP contract for the API gateway.
 func NewRouter(options RouterOptions) http.Handler {
 	allowedOriginSet := toSet(options.AllowedOrigins)
 	serviceName := fallback(options.ServiceName, "api-gateway")
+	eventProducer := options.EventProducer
+	if eventProducer == nil {
+		eventProducer = eda.NewNoopProducer()
+	}
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
@@ -81,6 +106,7 @@ func NewRouter(options RouterOptions) http.Handler {
 			Runtime:         runtime.Version(),
 			DefaultTimezone: fallback(options.DefaultTimezone, "UTC"),
 			AuthEnabled:     options.AuthEnabled,
+			EDAEnabled:      options.EDAEnabled,
 		})
 	})
 
@@ -98,6 +124,69 @@ func NewRouter(options RouterOptions) http.Handler {
 			Status:    "ok",
 			Principal: fallback(principal, "unknown"),
 			Roles:     claims.RealmAccess.Roles,
+		})
+	})
+
+	mux.HandleFunc("/api/v1/template/events", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		var req publishEventRequest
+		decoder := json.NewDecoder(r.Body)
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+			return
+		}
+		if strings.TrimSpace(req.EventType) == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "event_type is required"})
+			return
+		}
+		if len(bytes.TrimSpace(req.Payload)) == 0 {
+			req.Payload = json.RawMessage(`{}`)
+		}
+
+		principal := "anonymous"
+		if claims, ok := ClaimsFromContext(r.Context()); ok && claims != nil {
+			principal = fallback(claims.PreferredUsername, claims.Email)
+		}
+
+		traceID := ""
+		spanContext := trace.SpanContextFromContext(r.Context())
+		if spanContext.IsValid() {
+			traceID = spanContext.TraceID().String()
+		}
+
+		event := eda.Event{
+			ID:        uuid.NewString(),
+			Type:      strings.TrimSpace(req.EventType),
+			Source:    serviceName,
+			Timestamp: time.Now().UTC(),
+			TraceID:   traceID,
+			Principal: principal,
+			Payload:   req.Payload,
+			Metadata:  req.Metadata,
+		}
+
+		routingKey := strings.TrimSpace(req.RoutingKey)
+		if routingKey == "" {
+			routingKey = defaultRoutingKey(options.EventRoutingKeyBase, req.EventType)
+		}
+
+		if err := eventProducer.Publish(r.Context(), routingKey, event); err != nil {
+			if options.Logger != nil {
+				options.Logger.Printf("eda publish failed: %v", err)
+			}
+			writeJSON(w, http.StatusBadGateway, map[string]string{"error": "failed to publish event"})
+			return
+		}
+
+		writeJSON(w, http.StatusAccepted, publishEventResponse{
+			Status:     "accepted",
+			EventID:    event.ID,
+			RoutingKey: routingKey,
 		})
 	})
 
@@ -202,4 +291,46 @@ func fallback(value, defaultValue string) string {
 		return defaultValue
 	}
 	return value
+}
+
+func defaultRoutingKey(base, eventType string) string {
+	base = strings.Trim(strings.ToLower(strings.TrimSpace(base)), ".")
+	normalizedEventType := normalizeRoutingToken(eventType)
+	if base == "" {
+		return normalizedEventType
+	}
+	if normalizedEventType == "" {
+		return base
+	}
+	return base + "." + normalizedEventType
+}
+
+func normalizeRoutingToken(value string) string {
+	raw := strings.ToLower(strings.TrimSpace(value))
+	if raw == "" {
+		return "event"
+	}
+
+	replacer := strings.NewReplacer(" ", ".", "/", ".", ":", ".", "-", ".")
+	raw = replacer.Replace(raw)
+
+	var builder strings.Builder
+	prevDot := false
+	for _, ch := range raw {
+		if (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '_' {
+			builder.WriteRune(ch)
+			prevDot = false
+			continue
+		}
+		if ch == '.' && !prevDot && builder.Len() > 0 {
+			builder.WriteRune('.')
+			prevDot = true
+		}
+	}
+
+	out := strings.Trim(builder.String(), ".")
+	if out == "" {
+		return "event"
+	}
+	return out
 }

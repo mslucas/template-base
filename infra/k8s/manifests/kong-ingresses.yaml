@@ -13,6 +13,7 @@ spec:
     - hosts:
         - __HOST_API__
         - __HOST_WEBHOOK__
+        - __HOST_AI__
       secretName: kong-proxy-tls
   rules:
     - host: __HOST_API__
@@ -26,6 +27,16 @@ spec:
                 port:
                   number: 80
     - host: __HOST_WEBHOOK__
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: kong-kong-proxy
+                port:
+                  number: 80
+    - host: __HOST_AI__
       http:
         paths:
           - path: /
@@ -110,4 +121,24 @@ spec:
                 name: api-gateway
                 port:
                   number: 80
-
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: litellm-route
+  namespace: __K8S_NAMESPACE__
+  annotations:
+    konghq.com/strip-path: "false"
+spec:
+  ingressClassName: kong
+  rules:
+    - host: __HOST_AI__
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: litellm
+                port:
+                  number: 4000

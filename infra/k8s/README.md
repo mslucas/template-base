@@ -7,6 +7,8 @@ Stack base instalada pelo bootstrap:
 - PostgreSQL
 - Redis
 - RabbitMQ
+- EMQX Operator + EMQX
+- LiteLLM (AI Gateway open source)
 - OpenTelemetry Collector
 - Keycloak
 - Kong
@@ -25,6 +27,7 @@ Stack base instalada pelo bootstrap:
 LETSENCRYPT_EMAIL="__LETSENCRYPT_EMAIL__" \
 ARGOCD_REPO_TOKEN="<token_git>" \
 GHCR_PULL_TOKEN="<token_ghcr>" \
+OPENAI_API_KEY="<token_provider>" \
 ENABLE_MONITORING_PACK="true" \
 ./infra/k8s/scripts/bootstrap.sh
 ```
